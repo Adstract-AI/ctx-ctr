@@ -1,0 +1,182 @@
+name: ${COMPOSE_PROJECT_NAME:-ctx_ctr}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ctx-ctr-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ctx_ctr}
+      POSTGRES_USER: ${POSTGRES_USER:-ctx_ctr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ctx_ctr}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ctx_ctr} -d ${POSTGRES_DB:-ctx_ctr}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: ctx-ctr-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: ctx-ctr-kafka
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:${KAFKA_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: ctx-ctr-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/scripts/create-topics.sh"]
+    volumes:
+      - ./docker/kafka/create-topics.sh:/scripts/create-topics.sh:ro
+    restart: "no"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: ctx-ctr-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: ctx-ctr
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    ports:
+      - "${KAFKA_UI_PORT:-8088}:8080"
+
+  flink-jobmanager:
+    build:
+      context: .
+      dockerfile: docker/flink/Dockerfile
+    image: ctx-ctr/flink-jobmanager-python:1.19.1
+    container_name: ctx-ctr-flink-jobmanager
+    command: jobmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        parallelism.default: 1
+        python.client.executable: /usr/bin/python3
+        python.executable: /usr/bin/python3
+    ports:
+      - "${FLINK_JOBMANAGER_PORT:-8081}:8081"
+    volumes:
+      - ./src:/opt/ctx-ctr/src
+      - ./jobs:/opt/ctx-ctr/jobs
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  flink-taskmanager:
+    build:
+      context: .
+      dockerfile: docker/flink/Dockerfile
+    image: ctx-ctr/flink-taskmanager-python:1.19.1
+    container_name: ctx-ctr-flink-taskmanager
+    command: taskmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 1
+        python.client.executable: /usr/bin/python3
+        python.executable: /usr/bin/python3
+    volumes:
+      - ./src:/opt/ctx-ctr/src
+      - ./jobs:/opt/ctx-ctr/jobs
+    depends_on:
+      flink-jobmanager:
+        condition: service_started
+
+  spark-master:
+    build:
+      context: .
+      dockerfile: docker/spark/Dockerfile
+    image: ctx-ctr/spark-master-python:3.5.1
+    container_name: ctx-ctr-spark-master
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.master.Master
+      - --host
+      - spark-master
+      - --port
+      - "7077"
+      - --webui-port
+      - "8080"
+    ports:
+      - "${SPARK_MASTER_WEBUI_PORT:-8080}:8080"
+      - "${SPARK_MASTER_PORT:-7077}:7077"
+    volumes:
+      - ./src:/opt/ctx-ctr/src
+      - ./jobs:/opt/ctx-ctr/jobs
+      - ./experiments:/opt/ctx-ctr/experiments
+
+  spark-worker:
+    build:
+      context: .
+      dockerfile: docker/spark/Dockerfile
+    image: ctx-ctr/spark-worker-python:3.5.1
+    container_name: ctx-ctr-spark-worker
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark-master:7077
+      - --cores
+      - "2"
+      - --memory
+      - 2G
+      - --webui-port
+      - "8081"
+    ports:
+      - "${SPARK_WORKER_WEBUI_PORT:-8082}:8081"
+    volumes:
+      - ./src:/opt/ctx-ctr/src
+      - ./jobs:/opt/ctx-ctr/jobs
+      - ./experiments:/opt/ctx-ctr/experiments
+    depends_on:
+      - spark-master
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
