@@ -1,0 +1,15 @@
+# Optional local-mode processing engines.
+#
+# The Docker processing clusters already contain PyFlink and PySpark, so this
+# file is only needed when running either engine directly from the conda env.
+#
+# PyFlink 1.19.1 depends on Apache Beam 2.48.0. On macOS ARM with Python 3.11,
+# Beam must currently be built from source. Beam 2.48.0's Cython extensions are
+# incompatible with Cython 3, and its build still imports pkg_resources:
+#
+#   conda activate big-data
+#   python -m pip install "setuptools<81" wheel "Cython==0.29.36"
+#   python -m pip install --no-build-isolation -r requirements-processing-local.txt
+
+apache-flink==1.19.1
+pyspark==3.5.1
