@@ -316,7 +316,28 @@ ctr:{ad_category}:{publisher_domain}:{conversation_category}
 weights:current
 ```
 
-## 13. Stop the Services
+## 13. Produce Simulated Events
+
+Validate event generation without publishing to Kafka:
+
+```bash
+python -m ctx_ctr.jobs.produce_events --dry-run --impressions 100
+```
+
+Produce simulated impression and click events to Kafka:
+
+```bash
+python -m ctx_ctr.jobs.produce_events --impressions 1000 --events-per-second 20
+```
+
+By default, impressions are published to `ctr.impressions` and clicks are
+published to `ctr.clicks`. To also mirror every event into `ctr.events`, add:
+
+```bash
+python -m ctx_ctr.jobs.produce_events --impressions 1000 --also-unified
+```
+
+## 14. Stop the Services
 
 Stop the required services:
 
