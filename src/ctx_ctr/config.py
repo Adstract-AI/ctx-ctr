@@ -10,6 +10,8 @@ from ctx_ctr.constants import (
     DEFAULT_FLINK_REST_URL,
     DEFAULT_IMPRESSION_TOPIC,
     DEFAULT_KAFKA_BOOTSTRAP_SERVERS,
+    DEFAULT_LOG_COLOR,
+    DEFAULT_LOG_LEVEL,
     DEFAULT_POSTGRES_DSN,
     DEFAULT_REDIS_URL,
     DEFAULT_SPARK_MASTER_URL,
@@ -28,6 +30,8 @@ class RuntimeSettings(BaseSettings):
     click_topic: str = Field(default=DEFAULT_CLICK_TOPIC)
     event_topic: str = Field(default=DEFAULT_EVENT_TOPIC)
     dead_letter_topic: str = Field(default=DEFAULT_DEAD_LETTER_TOPIC)
+    log_level: str = Field(default=DEFAULT_LOG_LEVEL)
+    log_color: str = Field(default=DEFAULT_LOG_COLOR)
 
     model_config = SettingsConfigDict(
         env_file=".env",

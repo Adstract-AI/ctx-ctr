@@ -232,7 +232,12 @@ REDIS_URL=redis://localhost:6379/0
 POSTGRES_DSN=postgresql://ctx_ctr:ctx_ctr@localhost:5432/ctx_ctr
 SPARK_MASTER_URL=spark://localhost:7077
 FLINK_REST_URL=http://localhost:8081
+LOG_LEVEL=INFO
+LOG_COLOR=cyan
 ```
+
+Supported log colors are `black`, `red`, `green`, `yellow`, `blue`, `magenta`,
+`cyan`, and `white`.
 
 Programs running inside Docker use Docker service names:
 
@@ -271,7 +276,47 @@ docker compose \
   ps
 ```
 
-## 12. Stop the Services
+## 12. Seed Demo Data
+
+Validate the deterministic research-demo seed dataset without writing anything:
+
+```bash
+python -m ctx_ctr.jobs.seed_values --dry-run
+```
+
+Reset Postgres and Redis seed-owned state:
+
+```bash
+python -m ctx_ctr.jobs.reset_values
+```
+
+Seed bucket statistics, model weights, and seed metadata:
+
+```bash
+python -m ctx_ctr.jobs.seed_values
+```
+
+Kafka topics are handled separately. To delete and recreate all known project
+topics, use:
+
+```bash
+python -m ctx_ctr.jobs.clean_topics
+```
+
+To clean only selected topics:
+
+```bash
+python -m ctx_ctr.jobs.clean_topics --only ctr.impressions ctr.clicks
+```
+
+Seeded Redis keys use:
+
+```text
+ctr:{ad_category}:{publisher_domain}:{conversation_category}
+weights:current
+```
+
+## 13. Stop the Services
 
 Stop the required services:
 
