@@ -78,7 +78,7 @@ class SeedService:
             summary=dataset.summary(),
         )
         if dry_run:
-            logger.info("Validated seed dataset in dry-run mode")
+            logger.debug("Validated seed dataset in dry-run mode")
             return result
 
         self._postgres.upsert_bucket_statistics(dataset.bucket_statistics)
@@ -86,7 +86,7 @@ class SeedService:
         self._postgres.insert_seed_run_summaries(dataset.run_summaries)
         self._redis.write_bucket_statistics(dataset.bucket_statistics)
         self._redis.write_current_weights(dataset.model_snapshots[-1])
-        logger.info("Seeded demo dataset")
+        logger.debug("Seeded seed-values dataset")
         return result
 
     def reset(self, *, dry_run: bool) -> ResetResult:
@@ -94,10 +94,10 @@ class SeedService:
 
         result = ResetResult(dry_run=dry_run, reset_postgres=True, reset_redis=True)
         if dry_run:
-            logger.info("Validated seed reset in dry-run mode")
+            logger.debug("Validated seed reset in dry-run mode")
             return result
 
         self._postgres.reset_seed_tables()
         self._redis.reset_seed_keys()
-        logger.info("Reset demo seed state")
+        logger.debug("Reset seed-values state")
         return result

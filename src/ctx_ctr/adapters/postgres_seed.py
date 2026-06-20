@@ -54,7 +54,7 @@ class PostgresSeedAdapter:
                     """
                 )
             connection.commit()
-            logger.info("Reset Postgres seed tables")
+            logger.debug("Reset Postgres seed tables")
         except psycopg.Error as error:
             connection.rollback()
             raise SeedError("Failed to reset Postgres seed tables") from error
@@ -123,7 +123,7 @@ class PostgresSeedAdapter:
                     [bucket.model_dump() for bucket in buckets],
                 )
             connection.commit()
-            logger.info(f"Seeded {len(buckets)} Postgres bucket statistics")
+            logger.debug(f"Seeded {len(buckets)} Postgres bucket statistics")
         except psycopg.Error as error:
             connection.rollback()
             raise SeedError("Failed to seed Postgres bucket statistics") from error
@@ -157,7 +157,7 @@ class PostgresSeedAdapter:
                     ],
                 )
             connection.commit()
-            logger.info(f"Seeded {len(snapshots)} Postgres model snapshots")
+            logger.debug(f"Seeded {len(snapshots)} Postgres model snapshots")
         except psycopg.Error as error:
             connection.rollback()
             raise SeedError("Failed to seed Postgres model snapshots") from error
@@ -191,7 +191,7 @@ class PostgresSeedAdapter:
                     ],
                 )
             connection.commit()
-            logger.info(f"Seeded {len(summaries)} Postgres seed run summaries")
+            logger.debug(f"Seeded {len(summaries)} Postgres seed run summaries")
         except psycopg.Error as error:
             connection.rollback()
             raise SeedError("Failed to seed Postgres seed run summaries") from error

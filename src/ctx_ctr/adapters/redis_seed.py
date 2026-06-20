@@ -31,7 +31,7 @@ class RedisSeedAdapter:
             ]
             if keys:
                 self._client.delete(*keys)
-            logger.info(f"Reset {len(keys)} Redis seed keys")
+            logger.debug(f"Reset {len(keys)} Redis seed keys")
         except RedisError as error:
             raise SeedError("Failed to reset Redis seed keys") from error
 
@@ -45,7 +45,7 @@ class RedisSeedAdapter:
             for bucket in buckets:
                 pipeline.set(bucket.redis_key, json.dumps(bucket.redis_payload(), sort_keys=True))
             pipeline.execute()  # type: ignore[no-untyped-call]
-            logger.info(f"Seeded {len(buckets)} Redis bucket statistics")
+            logger.debug(f"Seeded {len(buckets)} Redis bucket statistics")
         except RedisError as error:
             raise SeedError("Failed to seed Redis bucket statistics") from error
 
@@ -57,6 +57,6 @@ class RedisSeedAdapter:
                 REDIS_CURRENT_WEIGHTS_KEY,
                 json.dumps(snapshot.redis_payload(), sort_keys=True),
             )
-            logger.info(f"Seeded Redis current weights from {snapshot.snapshot_name}")
+            logger.debug(f"Seeded Redis current weights from {snapshot.snapshot_name}")
         except RedisError as error:
             raise SeedError("Failed to seed Redis current weights") from error

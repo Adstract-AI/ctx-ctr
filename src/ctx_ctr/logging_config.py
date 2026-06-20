@@ -18,6 +18,9 @@ LOG_COLORS = {
     "white": "\033[37m",
 }
 RESET_COLOR = "\033[0m"
+SUCCESS_COLOR = LOG_COLORS["green"]
+ERROR_COLOR = LOG_COLORS["red"]
+NOISY_LOGGERS = ["kafka"]
 
 
 class ColorFormatter(logging.Formatter):
@@ -44,13 +47,33 @@ def configure_logging(log_level: str, log_color: str) -> None:
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(ColorFormatter(log_color))
 
+    project_logger = logging.getLogger("ctx_ctr")
+    project_logger.handlers.clear()
+    project_logger.addHandler(handler)
+    project_logger.setLevel(level)
+    project_logger.propagate = False
+
     root_logger = logging.getLogger()
     root_logger.handlers.clear()
-    root_logger.addHandler(handler)
-    root_logger.setLevel(level)
+    root_logger.setLevel(logging.WARNING)
+
+    for logger_name in NOISY_LOGGERS:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> logging.Logger:
     """Return a named project logger."""
 
     return logging.getLogger(name)
+
+
+def success_line(message: str) -> str:
+    """Return a green terminal summary line."""
+
+    return f"{SUCCESS_COLOR}{message}{RESET_COLOR}"
+
+
+def error_line(message: str) -> str:
+    """Return a red terminal summary line."""
+
+    return f"{ERROR_COLOR}{message}{RESET_COLOR}"

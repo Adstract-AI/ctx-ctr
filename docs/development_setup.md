@@ -330,6 +330,14 @@ Produce simulated impression and click events to Kafka:
 python -m ctx_ctr.jobs.produce_events --impressions 1000 --events-per-second 20
 ```
 
+Log progress every N produced events:
+
+```bash
+python -m ctx_ctr.jobs.produce_events --impressions 1000 --events-per-second 20 --log-every 100
+```
+
+Use `--log-every 0` to disable progress logs.
+
 By default, impressions are published to `ctr.impressions` and clicks are
 published to `ctr.clicks`. To also mirror every event into `ctr.events`, add:
 

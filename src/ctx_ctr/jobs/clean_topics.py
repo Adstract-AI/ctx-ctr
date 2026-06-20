@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
-import json
 
 from ctx_ctr.adapters.kafka_admin import KafkaTopicAdminAdapter
 from ctx_ctr.config import load_settings
-from ctx_ctr.logging_config import configure_logging
+from ctx_ctr.jobs.output import print_failure, print_success
+from ctx_ctr.logging_config import configure_logging, get_logger
+
+logger = get_logger("ctx_ctr.jobs.clean_topics")
 
 
 def main() -> None:
@@ -30,17 +32,34 @@ def main() -> None:
         settings.event_topic,
         settings.dead_letter_topic,
     ]
+    logger.info(f"Selected Kafka topics: {', '.join(topic_names)}")
 
     if args.dry_run:
-        print(json.dumps({"dry_run": True, "topics": topic_names}, indent=2, sort_keys=True))
+        logger.info("Running Kafka topic cleanup dry-run")
+        print_success(
+            "Kafka topic cleanup dry-run",
+            [
+                f"topics: {', '.join(topic_names)}",
+                "no topics were changed",
+            ],
+        )
         return
 
-    adapter = KafkaTopicAdminAdapter(
-        bootstrap_servers=settings.kafka_bootstrap_servers,
-        topic_names=topic_names,
+    try:
+        logger.info("Starting Kafka topic cleanup")
+        adapter = KafkaTopicAdminAdapter(
+            bootstrap_servers=settings.kafka_bootstrap_servers,
+            topic_names=topic_names,
+        )
+        adapter.clean_topics()
+    except Exception as error:
+        print_failure("Kafka topic cleanup", error)
+        raise
+
+    print_success(
+        "Kafka topic cleanup complete",
+        [f"topics: {', '.join(topic_names)}"],
     )
-    adapter.clean_topics()
-    print(json.dumps({"dry_run": False, "topics": topic_names}, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

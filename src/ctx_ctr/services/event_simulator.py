@@ -40,6 +40,7 @@ class EventProducerRunConfig(BaseModel):
     impressions: int = Field(gt=0)
     events_per_second: float = Field(ge=0)
     random_seed: int
+    log_every: int = Field(ge=0)
     also_unified: bool = False
     dry_run: bool = False
 
@@ -79,16 +80,23 @@ class EventSimulatorService:
         batch = self.build_batch(config.impressions, config.random_seed)
         if config.dry_run:
             logger.info(
-                f"Validated event production dry-run with "
+                f"Prepared event production dry-run with "
                 f"{batch.impression_count} impressions and {batch.click_count} clicks"
             )
             return self._result_from_batch(batch, dry_run=True)
 
         delay_seconds = 1.0 / config.events_per_second if config.events_per_second > 0 else 0.0
-        for event in batch.events:
+        logger.info(
+            f"Starting event production: {batch.impression_count} impressions, "
+            f"{batch.click_count} clicks, {len(batch.events)} total events"
+        )
+        for event_index, event in enumerate(batch.events, start=1):
             self._publisher.publish(event, also_unified=config.also_unified)
+            if self._should_log_progress(event_index, len(batch.events), config.log_every):
+                logger.info(f"Produced {event_index}/{len(batch.events)} events")
             if delay_seconds > 0:
                 time.sleep(delay_seconds)
+        logger.info("Flushing produced events")
         self._publisher.flush()
         logger.info(
             f"Produced {batch.impression_count} impressions and {batch.click_count} clicks"
@@ -185,3 +193,7 @@ class EventSimulatorService:
             total_events=len(batch.events),
         )
 
+    def _should_log_progress(self, event_index: int, total_events: int, log_every: int) -> bool:
+        if log_every == 0:
+            return False
+        return event_index == total_events or event_index % log_every == 0

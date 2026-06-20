@@ -29,13 +29,13 @@ class KafkaTopicAdminAdapter:
                 client.delete_topics(self._topic_names)
                 time.sleep(2)
             except UnknownTopicOrPartitionError:
-                logger.info("Kafka topics did not exist during reset")
+                logger.debug("Kafka topics did not exist during reset")
             topics = [
                 NewTopic(name=name, num_partitions=1, replication_factor=1)
                 for name in self._topic_names
             ]
             client.create_topics(topics, validate_only=False)
-            logger.info(f"Cleaned Kafka topics: {', '.join(self._topic_names)}")
+            logger.debug(f"Cleaned Kafka topics: {', '.join(self._topic_names)}")
         except KafkaError as error:
             raise SeedError("Failed to clean Kafka topics") from error
         finally:
