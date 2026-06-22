@@ -8,3 +8,6 @@ class CtxCtrError(Exception):
 class SeedError(CtxCtrError):
     """Raised when demo seed data cannot be prepared or written."""
 
+
+class CtrStateError(CtxCtrError):
+    """Raised when CTR runtime state cannot be read, updated, or written."""
