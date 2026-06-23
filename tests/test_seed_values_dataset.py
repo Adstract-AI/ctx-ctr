@@ -16,7 +16,7 @@ def test_seed_values_dataset_has_expected_shape() -> None:
         len(AD_CATEGORIES) * len(PUBLISHER_DOMAINS) * len(CONVERSATION_CATEGORIES)
     )
     assert len(dataset.model_snapshots) == 1
-    assert len(dataset.experiment_results) == 1
+    assert len(dataset.run_summaries) == 1
     assert dataset.model_snapshots[0].snapshot_name == "seed_values_v1"
 
 

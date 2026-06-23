@@ -6,13 +6,16 @@ import argparse
 
 from ctx_ctr.adapters.postgres_seed import PostgresSeedAdapter
 from ctx_ctr.adapters.redis_seed import RedisSeedAdapter
-from ctx_ctr.config import load_settings
+from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL, POSTGRES_DSN, REDIS_URL
+from ctx_ctr.job_config_loader import load_job_config, merge_job_config
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
+from ctx_ctr.models.job_configs import ResetValuesJobConfig
 from ctx_ctr.models.seed import SeedBucketStatistic, SeedModelSnapshot, SeedRunSummary
 from ctx_ctr.services.seed_service import SeedService
 
 logger = get_logger("ctx_ctr.jobs.reset_values")
+DEFAULT_CONFIG_PATH = "configs/reset_values.yaml"
 
 
 class DryRunPostgresResetAdapter:
@@ -48,12 +51,19 @@ def main() -> None:
     """Parse CLI arguments and reset seeded values."""
 
     parser = argparse.ArgumentParser(description="Reset deterministic CTR values.")
-    parser.add_argument("--dry-run", action="store_true", help="validate reset without writing")
+    parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="path to the job YAML config")
+    parser.add_argument(
+        "--dry-run",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="validate reset without writing",
+    )
     args = parser.parse_args()
+    file_config = load_job_config(args.config, ResetValuesJobConfig)
+    config = merge_job_config(file_config, _cli_overrides(args))
 
-    settings = load_settings()
-    configure_logging(settings.log_level, settings.log_color)
-    if args.dry_run:
+    configure_logging(LOG_LEVEL, LOG_COLOR)
+    if config.dry_run:
         logger.info("Running reset values dry-run")
         service = SeedService(
             postgres=DryRunPostgresResetAdapter(),
@@ -65,14 +75,15 @@ def main() -> None:
             [
                 f"postgres reset planned: {result.reset_postgres}",
                 f"redis reset planned: {result.reset_redis}",
+                f"config: {args.config}",
             ],
         )
         return
 
     try:
         logger.info("Starting reset of Postgres seed tables and Redis seed keys")
-        with PostgresSeedAdapter(settings.postgres_dsn) as postgres:
-            redis = RedisSeedAdapter(settings.redis_url)
+        with PostgresSeedAdapter(POSTGRES_DSN) as postgres:
+            redis = RedisSeedAdapter(REDIS_URL)
             service = SeedService(postgres=postgres, redis=redis)
             result = service.reset(dry_run=False)
     except Exception as error:
@@ -84,8 +95,18 @@ def main() -> None:
         [
             f"postgres reset: {result.reset_postgres}",
             f"redis reset: {result.reset_redis}",
+            f"config: {args.config}",
         ],
     )
+
+
+def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
+    """Return CLI values explicitly overriding the YAML config."""
+
+    overrides: dict[str, object] = {}
+    if args.dry_run is not None:
+        overrides["dry_run"] = args.dry_run
+    return overrides
 
 
 if __name__ == "__main__":

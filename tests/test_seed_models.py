@@ -6,8 +6,9 @@ from pydantic import ValidationError
 from ctx_ctr.models.seed import (
     SeedBucketStatistic,
     SeedDataset,
-    SeedExperimentResult,
+    SeedModelMetrics,
     SeedModelSnapshot,
+    SeedRunSummary,
     SeedWeights,
 )
 
@@ -53,9 +54,10 @@ def test_seed_dataset_rejects_duplicate_buckets() -> None:
         snapshot_name="seed_values_v1",
         w0=-3.89,
         weights=SeedWeights(w_ad={"finance": 0.0}, w_dom={"news.example": 0.0}, w_ctx={"ctx": 0.0}),
+        metrics=SeedModelMetrics(baseline_ctr=0.02, prior_strength=100.0),
     )
-    result = SeedExperimentResult(
-        experiment_name="seed_values_baseline",
+    summary = SeedRunSummary(
+        summary_name="seed_values_baseline",
         config={},
         metrics={},
     )
@@ -65,5 +67,5 @@ def test_seed_dataset_rejects_duplicate_buckets() -> None:
             generated_at=datetime(2026, 1, 1, tzinfo=UTC),
             bucket_statistics=[bucket, bucket],
             model_snapshots=[snapshot],
-            experiment_results=[result],
+            run_summaries=[summary],
         )

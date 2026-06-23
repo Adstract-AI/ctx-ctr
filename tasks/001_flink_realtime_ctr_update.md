@@ -213,6 +213,7 @@ Add these flags to `ctx_ctr.jobs.run_realtime_ctr`:
 - `--consumer-group`, default `ctx-ctr-flink-realtime`
 - `--parallelism`, default `1`
 - `--checkpoint-interval-ms`, default `10000`
+- `--kafka-connector-jar`, optional local path to the Flink Kafka connector jar
 - `--log-every`, default `100`
 
 `--log-every 0` disables progress logs.
@@ -235,6 +236,11 @@ helper module.
 
 Redis and Kafka integration details should stay behind adapter-style boundaries
 where practical.
+
+Local PyFlink needs a Flink Kafka connector jar. If the local PyFlink
+installation does not already include one, the job should accept the jar path
+through `--kafka-connector-jar` and add it to the Flink environment before
+building Kafka sources and sinks.
 
 Do not use Spark for this task.
 
