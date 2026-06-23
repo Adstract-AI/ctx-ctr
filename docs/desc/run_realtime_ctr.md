@@ -8,10 +8,22 @@ Runs the local PyFlink realtime CTR updater.
 python -m ctx_ctr.jobs.run_realtime_ctr
 ```
 
+Short command:
+
+```bash
+realtime-ctr
+```
+
 Example with slower progress logs:
 
 ```bash
 python -m ctx_ctr.jobs.run_realtime_ctr --log-every 500
+```
+
+Default config:
+
+```text
+configs/run_realtime_ctr.yaml
 ```
 
 ## Purpose
@@ -41,6 +53,8 @@ python -m ctx_ctr.jobs.seed_values
 
 ## Flags
 
+- `--config <path>`: YAML config path. Defaults to
+  `configs/run_realtime_ctr.yaml`.
 - `--impression-topic <topic>`: Impression input topic. Defaults to
   `ctr.impressions`.
 - `--click-topic <topic>`: Click input topic. Defaults to `ctr.clicks`.
@@ -54,11 +68,25 @@ python -m ctx_ctr.jobs.seed_values
 - `--parallelism <int>`: PyFlink parallelism. Defaults to `1`.
 - `--checkpoint-interval-ms <int>`: Checkpoint interval. Defaults to `10000`.
   Use `0` to disable checkpointing.
-- `--kafka-connector-jar <path>`: Optional local path to the Flink Kafka
-  connector jar. Use this when the local PyFlink install does not already have
-  the Kafka connector on its classpath.
+- `--kafka-connector-jar <path>`: Local path to the Flink Kafka connector jar.
+  Defaults to the project `jars/` folder through the YAML config.
 - `--log-every <int>`: Log progress every N valid events. Use `0` to disable
   progress logs.
+
+CLI flags override values from the YAML config.
+
+## Config Fields
+
+- `impression_topic`, `click_topic`, `dead_letter_topic`: Kafka topics.
+- `bootstrap_servers`: Kafka bootstrap servers.
+- `redis_url`: Redis URL.
+- `consumer_group`: Kafka consumer group.
+- `parallelism`: PyFlink parallelism.
+- `checkpoint_interval_ms`: Flink checkpoint interval. Use `0` to disable.
+- `kafka_connector_jar`: Local Flink Kafka connector jar path. Relative paths
+  are resolved from the project root. Defaults to
+  `jars/flink-sql-connector-kafka-3.2.0-1.19.jar`.
+- `log_every`: Progress logging interval.
 
 ## Kafka Input
 
@@ -131,8 +159,15 @@ This job does not write to PostgreSQL.
 
 This job does not update model weights.
 
-Local PyFlink needs a Flink Kafka connector jar. If your PyFlink installation
-does not include one, pass it with `--kafka-connector-jar`.
+Local PyFlink needs a Flink Kafka connector jar. The default config expects it
+at:
+
+```text
+jars/flink-sql-connector-kafka-3.2.0-1.19.jar
+```
+
+See `docs/development_setup.md` for the download command. Use
+`--kafka-connector-jar` only when using a different connector location.
 
 For local development, start this job before running `produce_events` so the
 Kafka consumer begins from the latest offsets and receives newly produced

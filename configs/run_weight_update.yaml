@@ -1,0 +1,11 @@
+redis_url: redis://localhost:6379/0
+postgres_dsn: postgresql://ctx_ctr:ctx_ctr@localhost:5432/ctx_ctr
+interval_seconds: 3600
+once: false
+learning_rate: 0.25
+evidence_smoothing: 1000.0
+ridge: 0.01
+max_delta: 0.25
+min_trusted_buckets: 1
+snapshot_name_prefix: flink_weight_update
+dry_run: false

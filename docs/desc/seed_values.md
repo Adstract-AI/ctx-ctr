@@ -8,10 +8,22 @@ Seeds deterministic starting CTR values into PostgreSQL and Redis.
 python -m ctx_ctr.jobs.seed_values
 ```
 
+Short command:
+
+```bash
+seed-values
+```
+
 Dry-run:
 
 ```bash
 python -m ctx_ctr.jobs.seed_values --dry-run
+```
+
+Default config:
+
+```text
+configs/seed_values.yaml
 ```
 
 ## Purpose
@@ -38,8 +50,15 @@ This produces 100 bucket combinations.
 
 ## Flags
 
+- `--config <path>`: YAML config path. Defaults to `configs/seed_values.yaml`.
 - `--dry-run`: Builds and validates the seed dataset, prints the summary, and
   does not connect to PostgreSQL or Redis.
+
+CLI flags override values from the YAML config.
+
+## Config Fields
+
+- `dry_run`: Same behavior as `--dry-run`.
 
 ## How It Works
 
@@ -75,4 +94,3 @@ This job does not reset existing values first. Run `reset_values` before this
 job when you need a clean state.
 
 This job does not touch Kafka.
-

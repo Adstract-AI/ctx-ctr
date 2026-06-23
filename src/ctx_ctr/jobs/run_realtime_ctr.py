@@ -4,54 +4,45 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+from pathlib import Path
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ValidationError
 
 from ctx_ctr.adapters.redis_ctr_state import RedisCtrStateAdapter
-from ctx_ctr.config import load_settings
+from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL
 from ctx_ctr.exceptions import CtrStateError
-from ctx_ctr.jobs.output import print_failure
+from ctx_ctr.job_config_loader import load_job_config, merge_job_config
+from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
 from ctx_ctr.models.ctr_state import CtrBucketStatistic, DeadLetterPayload
 from ctx_ctr.models.events import CtrEvent
+from ctx_ctr.models.job_configs import RunRealtimeCtrJobConfig
 from ctx_ctr.services.realtime_ctr import RealtimeCtrUpdateService, event_bucket_key
 
 logger = get_logger("ctx_ctr.jobs.run_realtime_ctr")
 
 INVALID_BUCKET_KEY = "__invalid_event__"
-
-
-class RealtimeCtrJobConfig(BaseModel):
-    """Runtime controls for the realtime CTR Flink job."""
-
-    impression_topic: str
-    click_topic: str
-    dead_letter_topic: str
-    bootstrap_servers: str
-    redis_url: str
-    consumer_group: str
-    parallelism: int = Field(gt=0)
-    checkpoint_interval_ms: int = Field(ge=0)
-    log_every: int = Field(ge=0)
-    kafka_connector_jar: str | None = None
-
-    model_config = ConfigDict(frozen=True)
+DEFAULT_CONFIG_PATH = "configs/run_realtime_ctr.yaml"
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 def main() -> None:
     """Parse CLI arguments and start the realtime CTR Flink job."""
 
-    settings = load_settings()
     parser = argparse.ArgumentParser(description="Run realtime CTR updates with PyFlink.")
-    parser.add_argument("--impression-topic", default=settings.impression_topic)
-    parser.add_argument("--click-topic", default=settings.click_topic)
-    parser.add_argument("--dead-letter-topic", default=settings.dead_letter_topic)
-    parser.add_argument("--bootstrap-servers", default=settings.kafka_bootstrap_servers)
-    parser.add_argument("--redis-url", default=settings.redis_url)
-    parser.add_argument("--consumer-group", default="ctx-ctr-flink-realtime")
-    parser.add_argument("--parallelism", type=int, default=1)
-    parser.add_argument("--checkpoint-interval-ms", type=int, default=10000)
+    parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="path to the job YAML config")
+    parser.add_argument("--impression-topic", default=None)
+    parser.add_argument("--click-topic", default=None)
+    parser.add_argument("--dead-letter-topic", default=None)
+    parser.add_argument("--bootstrap-servers", default=None)
+    parser.add_argument("--redis-url", default=None)
+    parser.add_argument("--consumer-group", default=None)
+    parser.add_argument("--parallelism", type=int, default=None)
+    parser.add_argument("--checkpoint-interval-ms", type=int, default=None)
     parser.add_argument(
         "--kafka-connector-jar",
         default=None,
@@ -60,40 +51,40 @@ def main() -> None:
     parser.add_argument(
         "--log-every",
         type=int,
-        default=100,
+        default=None,
         help="log progress every N valid events; use 0 to disable progress logs",
     )
     args = parser.parse_args()
+    file_config = load_job_config(args.config, RunRealtimeCtrJobConfig)
+    config = merge_job_config(file_config, _cli_overrides(args))
 
-    configure_logging(settings.log_level, settings.log_color)
-    config = RealtimeCtrJobConfig(
-        impression_topic=args.impression_topic,
-        click_topic=args.click_topic,
-        dead_letter_topic=args.dead_letter_topic,
-        bootstrap_servers=args.bootstrap_servers,
-        redis_url=args.redis_url,
-        consumer_group=args.consumer_group,
-        parallelism=args.parallelism,
-        checkpoint_interval_ms=args.checkpoint_interval_ms,
-        log_every=args.log_every,
-        kafka_connector_jar=args.kafka_connector_jar,
-    )
-
+    configure_logging(LOG_LEVEL, LOG_COLOR)
     logger.info(
         "Configured realtime CTR job: "
         f"impression_topic={config.impression_topic}, click_topic={config.click_topic}, "
         f"dead_letter_topic={config.dead_letter_topic}, consumer_group={config.consumer_group}, "
-        f"parallelism={config.parallelism}, checkpoint_interval_ms={config.checkpoint_interval_ms}"
+        f"parallelism={config.parallelism}, checkpoint_interval_ms={config.checkpoint_interval_ms}, "
+        f"config={args.config}"
     )
 
     try:
         run_flink_realtime_ctr_job(config)
+    except KeyboardInterrupt:
+        print_success(
+            "Realtime CTR job stopped",
+            [
+                "status: interrupted by user",
+                f"impression topic: {config.impression_topic}",
+                f"click topic: {config.click_topic}",
+                f"dead-letter topic: {config.dead_letter_topic}",
+            ],
+        )
     except Exception as error:
         print_failure("Realtime CTR job", error)
         raise
 
 
-def run_flink_realtime_ctr_job(config: RealtimeCtrJobConfig) -> None:
+def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
     """Build and execute the local PyFlink realtime CTR topology."""
 
     from pyflink.common import Types, WatermarkStrategy  # type: ignore[import-untyped]
@@ -209,9 +200,15 @@ def run_flink_realtime_ctr_job(config: RealtimeCtrJobConfig) -> None:
 
     env = StreamExecutionEnvironment.get_execution_environment()
     env.set_parallelism(config.parallelism)
-    if config.kafka_connector_jar is not None:
-        env.add_jars(f"file://{config.kafka_connector_jar}")
-        logger.info(f"Added Kafka connector jar: {config.kafka_connector_jar}")
+    kafka_connector_jar = _resolve_project_path(config.kafka_connector_jar)
+    if not kafka_connector_jar.is_file():
+        raise FileNotFoundError(
+            "Flink Kafka connector jar was not found at "
+            f"{kafka_connector_jar}. Download it into the project jars folder "
+            "or override --kafka-connector-jar."
+        )
+    env.add_jars(kafka_connector_jar.as_uri())
+    logger.info(f"Added Kafka connector jar: {kafka_connector_jar}")
     if config.checkpoint_interval_ms > 0:
         env.enable_checkpointing(config.checkpoint_interval_ms)
 
@@ -247,7 +244,56 @@ def run_flink_realtime_ctr_job(config: RealtimeCtrJobConfig) -> None:
         output_type=Types.STRING(),
     )
     dead_letters.sink_to(dead_letter_sink).name("dead-letter-sink")
-    env.execute("ctx-ctr-realtime-ctr")
+    with _suppress_py4j_keyboard_interrupt_log():
+        env.execute("ctx-ctr-realtime-ctr")
+
+
+def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
+    """Return CLI values explicitly overriding the YAML config."""
+
+    overrides: dict[str, object] = {}
+    for field_name in (
+        "impression_topic",
+        "click_topic",
+        "dead_letter_topic",
+        "bootstrap_servers",
+        "redis_url",
+        "consumer_group",
+        "parallelism",
+        "checkpoint_interval_ms",
+        "kafka_connector_jar",
+        "log_every",
+    ):
+        value = getattr(args, field_name)
+        if value is not None:
+            overrides[field_name] = value
+    return overrides
+
+
+def _resolve_project_path(path_value: str) -> Path:
+    """Resolve absolute paths as-is and relative paths from the project root."""
+
+    path = Path(path_value).expanduser()
+    if path.is_absolute():
+        return path
+    return PROJECT_ROOT / path
+
+
+@contextmanager
+def _suppress_py4j_keyboard_interrupt_log() -> Iterator[None]:
+    """Hide Py4J's noisy root traceback for user-requested Ctrl+C shutdowns."""
+
+    class Py4jKeyboardInterruptFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return record.getMessage() != "KeyboardInterrupt while sending command."
+
+    root_logger = logging.getLogger()
+    log_filter = Py4jKeyboardInterruptFilter()
+    root_logger.addFilter(log_filter)
+    try:
+        yield
+    finally:
+        root_logger.removeFilter(log_filter)
 
 
 def _raw_event_bucket_key(raw_event: str) -> str:

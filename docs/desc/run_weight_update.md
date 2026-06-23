@@ -11,6 +11,12 @@ One-shot dry-run:
 python -m ctx_ctr.jobs.run_weight_update --once --dry-run
 ```
 
+Short command:
+
+```bash
+weight-update --once --dry-run
+```
+
 One real recalibration:
 
 ```bash
@@ -21,6 +27,12 @@ Periodic mode:
 
 ```bash
 python -m ctx_ctr.jobs.run_weight_update --interval-seconds 3600
+```
+
+Default config:
+
+```text
+configs/run_weight_update.yaml
 ```
 
 ## Purpose
@@ -88,6 +100,8 @@ belongs to Task 3.
 
 ## Flags
 
+- `--config <path>`: YAML config path. Defaults to
+  `configs/run_weight_update.yaml`.
 - `--redis-url`: Redis connection URL
 - `--postgres-dsn`: PostgreSQL DSN for snapshot history
 - `--interval-seconds`: periodic sleep interval, default `3600`
@@ -99,6 +113,17 @@ belongs to Task 3.
 - `--min-trusted-buckets`: default `1`
 - `--snapshot-name-prefix`: default `flink_weight_update`
 - `--dry-run`: compute updates without writing Redis or PostgreSQL
+
+CLI flags override values from the YAML config.
+
+## Config Fields
+
+- `redis_url`, `postgres_dsn`: Runtime storage connections.
+- `interval_seconds`: Periodic sleep interval.
+- `once`: Run one recalibration and exit.
+- `learning_rate`, `evidence_smoothing`, `ridge`, `max_delta`,
+  `min_trusted_buckets`, `snapshot_name_prefix`: Weight-learning controls.
+- `dry_run`: Compute without writing Redis or PostgreSQL.
 
 ## Example Verification
 

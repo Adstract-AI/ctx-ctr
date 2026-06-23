@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ctx_ctr.models.seed import SeedBucketStatistic, SeedExperimentResult, SeedModelSnapshot
+from ctx_ctr.models.seed import SeedBucketStatistic, SeedModelSnapshot, SeedRunSummary
 from ctx_ctr.services.seed_values_dataset import build_seed_values_dataset
 from ctx_ctr.services.seed_service import SeedService
 
@@ -10,7 +10,7 @@ class FakePostgresSeedAdapter:
         self.reset_called = False
         self.buckets: list[SeedBucketStatistic] = []
         self.snapshots: list[SeedModelSnapshot] = []
-        self.results: list[SeedExperimentResult] = []
+        self.summaries: list[SeedRunSummary] = []
 
     def reset_seed_tables(self) -> None:
         self.reset_called = True
@@ -21,8 +21,8 @@ class FakePostgresSeedAdapter:
     def insert_model_snapshots(self, snapshots: list[SeedModelSnapshot]) -> None:
         self.snapshots.extend(snapshots)
 
-    def insert_experiment_results(self, results: list[SeedExperimentResult]) -> None:
-        self.results.extend(results)
+    def insert_seed_run_summaries(self, summaries: list[SeedRunSummary]) -> None:
+        self.summaries.extend(summaries)
 
 
 class FakeRedisSeedAdapter:
@@ -74,7 +74,7 @@ def test_seed_service_resets_and_writes_to_postgres_and_redis() -> None:
     assert postgres.buckets == dataset.bucket_statistics
     assert redis.buckets == dataset.bucket_statistics
     assert postgres.snapshots == dataset.model_snapshots
-    assert postgres.results == dataset.experiment_results
+    assert postgres.summaries == dataset.run_summaries
     assert redis.current_weights == dataset.model_snapshots[-1]
 
 

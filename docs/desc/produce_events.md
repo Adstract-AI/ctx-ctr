@@ -8,6 +8,12 @@ Produces simulated CTR impression and click events to Kafka.
 python -m ctx_ctr.jobs.produce_events
 ```
 
+Short command:
+
+```bash
+produce-events
+```
+
 Example with a slower rate:
 
 ```bash
@@ -20,6 +26,12 @@ Dry-run:
 python -m ctx_ctr.jobs.produce_events --dry-run --impressions 100
 ```
 
+Default config:
+
+```text
+configs/produce_events.yaml
+```
+
 ## Purpose
 
 Use this job to simulate real traffic for local Flink/Kafka development.
@@ -29,6 +41,7 @@ from the same seeded CTR model weights used by the seed dataset.
 
 ## Flags
 
+- `--config <path>`: YAML config path. Defaults to `configs/produce_events.yaml`.
 - `--impressions <int>`: Number of impression events to simulate. Clicks are
   added on top of this count.
 - `--events-per-second <float>`: Send rate. Use `0` to publish as fast as
@@ -38,6 +51,19 @@ from the same seeded CTR model weights used by the seed dataset.
   disable progress logs.
 - `--also-unified`: Also publish every event to `ctr.events`.
 - `--dry-run`: Generate and summarize events without publishing to Kafka.
+- `--bootstrap-servers <host:port>`: Kafka bootstrap servers.
+- `--impression-topic <topic>`: Impression output topic.
+- `--click-topic <topic>`: Click output topic.
+- `--event-topic <topic>`: Unified event output topic.
+
+CLI flags override values from the YAML config.
+
+## Config Fields
+
+- `impressions`, `events_per_second`, `random_seed`, `log_every`,
+  `also_unified`, `dry_run`: Same meanings as the CLI flags.
+- `bootstrap_servers`, `impression_topic`, `click_topic`, `event_topic`:
+  Kafka connection and output topic settings.
 
 ## Event Counts
 
@@ -100,4 +126,3 @@ The simulator:
 Dry-run mode does not connect to Kafka.
 
 This job does not write to PostgreSQL or Redis.
-
