@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
@@ -23,6 +24,7 @@ logger = get_logger("ctx_ctr.jobs.run_realtime_ctr")
 
 INVALID_BUCKET_KEY = "__invalid_event__"
 DEFAULT_CONFIG_PATH = "configs/run_realtime_ctr.yaml"
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 def main() -> None:
@@ -185,9 +187,15 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
 
     env = StreamExecutionEnvironment.get_execution_environment()
     env.set_parallelism(config.parallelism)
-    if config.kafka_connector_jar is not None:
-        env.add_jars(f"file://{config.kafka_connector_jar}")
-        logger.info(f"Added Kafka connector jar: {config.kafka_connector_jar}")
+    kafka_connector_jar = _resolve_project_path(config.kafka_connector_jar)
+    if not kafka_connector_jar.is_file():
+        raise FileNotFoundError(
+            "Flink Kafka connector jar was not found at "
+            f"{kafka_connector_jar}. Download it into the project jars folder "
+            "or override --kafka-connector-jar."
+        )
+    env.add_jars(kafka_connector_jar.as_uri())
+    logger.info(f"Added Kafka connector jar: {kafka_connector_jar}")
     if config.checkpoint_interval_ms > 0:
         env.enable_checkpointing(config.checkpoint_interval_ms)
 
@@ -246,6 +254,15 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
         if value is not None:
             overrides[field_name] = value
     return overrides
+
+
+def _resolve_project_path(path_value: str) -> Path:
+    """Resolve absolute paths as-is and relative paths from the project root."""
+
+    path = Path(path_value).expanduser()
+    if path.is_absolute():
+        return path
+    return PROJECT_ROOT / path
 
 
 def _raw_event_bucket_key(raw_event: str) -> str:

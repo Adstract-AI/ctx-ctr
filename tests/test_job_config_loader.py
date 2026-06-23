@@ -65,7 +65,6 @@ def test_cli_overrides_are_revalidated() -> None:
 
 def test_null_is_allowed_only_for_optional_config_fields() -> None:
     clean_topics = CleanTopicsJobConfig(only=None)
-    realtime = RunRealtimeCtrJobConfig(kafka_connector_jar=None)
 
     assert clean_topics.topic_names == [
         "ctr.impressions",
@@ -73,10 +72,18 @@ def test_null_is_allowed_only_for_optional_config_fields() -> None:
         "ctr.events",
         "ctr.dead-letter",
     ]
-    assert realtime.kafka_connector_jar is None
 
     with pytest.raises(ValueError):
         ProduceEventsJobConfig(impressions=None)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError):
+        RunRealtimeCtrJobConfig(kafka_connector_jar=None)  # type: ignore[arg-type]
+
+
+def test_realtime_ctr_defaults_to_project_jars_folder() -> None:
+    config = RunRealtimeCtrJobConfig()
+
+    assert config.kafka_connector_jar == "jars/flink-sql-connector-kafka-3.2.0-1.19.jar"
 
 
 def test_default_job_configs_are_valid() -> None:

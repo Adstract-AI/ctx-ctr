@@ -28,6 +28,7 @@ DEFAULT_REDIS_URL = "redis://localhost:6379/0"
 DEFAULT_POSTGRES_DSN = "postgresql://ctx_ctr:ctx_ctr@localhost:5432/ctx_ctr"
 DEFAULT_SPARK_MASTER_URL = "spark://localhost:7077"
 DEFAULT_FLINK_REST_URL = "http://localhost:8081"
+DEFAULT_FLINK_KAFKA_CONNECTOR_JAR = "jars/flink-sql-connector-kafka-3.2.0-1.19.jar"
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_LOG_COLOR = "cyan"
 

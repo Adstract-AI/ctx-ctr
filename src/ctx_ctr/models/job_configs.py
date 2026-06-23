@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ctx_ctr.constants import DEFAULT_FLINK_KAFKA_CONNECTOR_JAR
 from ctx_ctr.env_variables import (
     CLICK_TOPIC,
     DEAD_LETTER_TOPIC,
@@ -84,7 +85,7 @@ class RunRealtimeCtrJobConfig(BaseModel):
     consumer_group: str = "ctx-ctr-flink-realtime"
     parallelism: int = Field(default=1, gt=0)
     checkpoint_interval_ms: int = Field(default=10000, ge=0)
-    kafka_connector_jar: str | None = None
+    kafka_connector_jar: str = DEFAULT_FLINK_KAFKA_CONNECTOR_JAR
     log_every: int = Field(default=100, ge=0)
 
     model_config = ConfigDict(frozen=True)
