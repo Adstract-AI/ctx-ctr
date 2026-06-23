@@ -25,3 +25,4 @@ Current jobs:
 - [produce_events](produce_events.md)
 - [run_realtime_ctr](run_realtime_ctr.md)
 - [run_weight_update](run_weight_update.md)
+- [watch_redis_values](watch_redis_values.md)

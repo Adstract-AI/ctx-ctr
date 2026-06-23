@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from pathlib import Path
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from pydantic import ValidationError
@@ -13,7 +16,7 @@ from ctx_ctr.adapters.redis_ctr_state import RedisCtrStateAdapter
 from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL
 from ctx_ctr.exceptions import CtrStateError
 from ctx_ctr.job_config_loader import load_job_config, merge_job_config
-from ctx_ctr.jobs.output import print_failure
+from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
 from ctx_ctr.models.ctr_state import CtrBucketStatistic, DeadLetterPayload
 from ctx_ctr.models.events import CtrEvent
@@ -66,6 +69,16 @@ def main() -> None:
 
     try:
         run_flink_realtime_ctr_job(config)
+    except KeyboardInterrupt:
+        print_success(
+            "Realtime CTR job stopped",
+            [
+                "status: interrupted by user",
+                f"impression topic: {config.impression_topic}",
+                f"click topic: {config.click_topic}",
+                f"dead-letter topic: {config.dead_letter_topic}",
+            ],
+        )
     except Exception as error:
         print_failure("Realtime CTR job", error)
         raise
@@ -231,7 +244,8 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
         output_type=Types.STRING(),
     )
     dead_letters.sink_to(dead_letter_sink).name("dead-letter-sink")
-    env.execute("ctx-ctr-realtime-ctr")
+    with _suppress_py4j_keyboard_interrupt_log():
+        env.execute("ctx-ctr-realtime-ctr")
 
 
 def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
@@ -263,6 +277,23 @@ def _resolve_project_path(path_value: str) -> Path:
     if path.is_absolute():
         return path
     return PROJECT_ROOT / path
+
+
+@contextmanager
+def _suppress_py4j_keyboard_interrupt_log() -> Iterator[None]:
+    """Hide Py4J's noisy root traceback for user-requested Ctrl+C shutdowns."""
+
+    class Py4jKeyboardInterruptFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return record.getMessage() != "KeyboardInterrupt while sending command."
+
+    root_logger = logging.getLogger()
+    log_filter = Py4jKeyboardInterruptFilter()
+    root_logger.addFilter(log_filter)
+    try:
+        yield
+    finally:
+        root_logger.removeFilter(log_filter)
 
 
 def _raw_event_bucket_key(raw_event: str) -> str:

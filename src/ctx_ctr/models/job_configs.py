@@ -107,3 +107,20 @@ class RunWeightUpdateJobConfig(BaseModel):
     dry_run: bool = False
 
     model_config = ConfigDict(frozen=True)
+
+
+class WatchRedisValuesJobConfig(BaseModel):
+    """Configuration for the Redis value inspection job."""
+
+    redis_url: str = REDIS_URL
+    pattern: str = "*"
+    limit: int = Field(default=200, gt=0)
+    watch: bool = False
+    interval_seconds: float = Field(default=2.0, gt=0)
+    pretty_json: bool = True
+    only_bucket: bool = False
+    ad_category: str | None = None
+    publisher_domain: str | None = None
+    conversation_category: str | None = None
+
+    model_config = ConfigDict(frozen=True)
