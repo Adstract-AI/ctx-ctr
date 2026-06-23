@@ -38,7 +38,7 @@ class ColorFormatter(logging.Formatter):
 
 
 def configure_logging(log_level: str, log_color: str) -> None:
-    """Configure the project logger from runtime settings."""
+    """Configure the project logger from environment variables."""
 
     level = logging.getLevelName(log_level.upper())
     if not isinstance(level, int):

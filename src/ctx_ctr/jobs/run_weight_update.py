@@ -7,7 +7,7 @@ import time
 from collections.abc import Sequence
 from contextlib import AbstractContextManager, nullcontext
 
-from ctx_ctr.config import load_settings
+from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL, POSTGRES_DSN, REDIS_URL
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
 from ctx_ctr.models.weight_update import WeightUpdateResult, WeightUpdateRunConfig
@@ -31,10 +31,9 @@ DEFAULT_SNAPSHOT_NAME_PREFIX = "flink_weight_update"
 def main(argv: Sequence[str] | None = None) -> None:
     """Parse CLI arguments and run the Task 2 periodic weight-update job."""
 
-    settings = load_settings()
-    parser = _build_parser(settings.redis_url, settings.postgres_dsn)
+    parser = _build_parser(REDIS_URL, POSTGRES_DSN)
     args = parser.parse_args(argv)
-    configure_logging(settings.log_level, settings.log_color)
+    configure_logging(LOG_LEVEL, LOG_COLOR)
 
     if args.interval_seconds <= 0:
         parser.error("--interval-seconds must be greater than zero")

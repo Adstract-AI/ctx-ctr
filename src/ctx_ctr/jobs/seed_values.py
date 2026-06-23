@@ -6,7 +6,7 @@ import argparse
 
 from ctx_ctr.adapters.postgres_seed import PostgresSeedAdapter
 from ctx_ctr.adapters.redis_seed import RedisSeedAdapter
-from ctx_ctr.config import load_settings
+from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL, POSTGRES_DSN, REDIS_URL
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
 from ctx_ctr.models.seed import SeedBucketStatistic, SeedModelSnapshot, SeedRunSummary
@@ -53,8 +53,7 @@ def main() -> None:
     args = parser.parse_args()
 
     dataset = build_seed_values_dataset()
-    settings = load_settings()
-    configure_logging(settings.log_level, settings.log_color)
+    configure_logging(LOG_LEVEL, LOG_COLOR)
     logger.info(
         f"Prepared seed values dataset: {dataset.summary()['bucket_statistics']} buckets, "
         f"{dataset.summary()['model_snapshots']} model snapshots, "
@@ -81,8 +80,8 @@ def main() -> None:
 
     try:
         logger.info("Starting seed values write to Postgres and Redis")
-        with PostgresSeedAdapter(settings.postgres_dsn) as postgres:
-            redis = RedisSeedAdapter(settings.redis_url)
+        with PostgresSeedAdapter(POSTGRES_DSN) as postgres:
+            redis = RedisSeedAdapter(REDIS_URL)
             service = SeedService(postgres=postgres, redis=redis)
             result = service.seed(
                 dataset,

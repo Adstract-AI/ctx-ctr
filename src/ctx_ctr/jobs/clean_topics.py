@@ -5,7 +5,15 @@ from __future__ import annotations
 import argparse
 
 from ctx_ctr.adapters.kafka_admin import KafkaTopicAdminAdapter
-from ctx_ctr.config import load_settings
+from ctx_ctr.env_variables import (
+    CLICK_TOPIC,
+    DEAD_LETTER_TOPIC,
+    EVENT_TOPIC,
+    IMPRESSION_TOPIC,
+    KAFKA_BOOTSTRAP_SERVERS,
+    LOG_COLOR,
+    LOG_LEVEL,
+)
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
 
@@ -24,13 +32,12 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="print selected topics without writing")
     args = parser.parse_args()
 
-    settings = load_settings()
-    configure_logging(settings.log_level, settings.log_color)
+    configure_logging(LOG_LEVEL, LOG_COLOR)
     topic_names = args.only or [
-        settings.impression_topic,
-        settings.click_topic,
-        settings.event_topic,
-        settings.dead_letter_topic,
+        IMPRESSION_TOPIC,
+        CLICK_TOPIC,
+        EVENT_TOPIC,
+        DEAD_LETTER_TOPIC,
     ]
     logger.info(f"Selected Kafka topics: {', '.join(topic_names)}")
 
@@ -48,7 +55,7 @@ def main() -> None:
     try:
         logger.info("Starting Kafka topic cleanup")
         adapter = KafkaTopicAdminAdapter(
-            bootstrap_servers=settings.kafka_bootstrap_servers,
+            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
             topic_names=topic_names,
         )
         adapter.clean_topics()

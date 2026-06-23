@@ -6,7 +6,7 @@ import argparse
 
 from ctx_ctr.adapters.postgres_seed import PostgresSeedAdapter
 from ctx_ctr.adapters.redis_seed import RedisSeedAdapter
-from ctx_ctr.config import load_settings
+from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL, POSTGRES_DSN, REDIS_URL
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
 from ctx_ctr.models.seed import SeedBucketStatistic, SeedModelSnapshot, SeedRunSummary
@@ -51,8 +51,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="validate reset without writing")
     args = parser.parse_args()
 
-    settings = load_settings()
-    configure_logging(settings.log_level, settings.log_color)
+    configure_logging(LOG_LEVEL, LOG_COLOR)
     if args.dry_run:
         logger.info("Running reset values dry-run")
         service = SeedService(
@@ -71,8 +70,8 @@ def main() -> None:
 
     try:
         logger.info("Starting reset of Postgres seed tables and Redis seed keys")
-        with PostgresSeedAdapter(settings.postgres_dsn) as postgres:
-            redis = RedisSeedAdapter(settings.redis_url)
+        with PostgresSeedAdapter(POSTGRES_DSN) as postgres:
+            redis = RedisSeedAdapter(REDIS_URL)
             service = SeedService(postgres=postgres, redis=redis)
             result = service.reset(dry_run=False)
     except Exception as error:

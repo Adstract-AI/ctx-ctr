@@ -232,6 +232,10 @@ REDIS_URL=redis://localhost:6379/0
 POSTGRES_DSN=postgresql://ctx_ctr:ctx_ctr@localhost:5432/ctx_ctr
 SPARK_MASTER_URL=spark://localhost:7077
 FLINK_REST_URL=http://localhost:8081
+IMPRESSION_TOPIC=ctr.impressions
+CLICK_TOPIC=ctr.clicks
+EVENT_TOPIC=ctr.events
+DEAD_LETTER_TOPIC=ctr.dead-letter
 LOG_LEVEL=INFO
 LOG_COLOR=cyan
 ```
@@ -247,6 +251,10 @@ REDIS_URL=redis://redis:6379/0
 POSTGRES_DSN=postgresql://ctx_ctr:ctx_ctr@postgres:5432/ctx_ctr
 SPARK_MASTER_URL=spark://spark-master:7077
 FLINK_REST_URL=http://flink-jobmanager:8081
+IMPRESSION_TOPIC=ctr.impressions
+CLICK_TOPIC=ctr.clicks
+EVENT_TOPIC=ctr.events
+DEAD_LETTER_TOPIC=ctr.dead-letter
 ```
 
 ## 11. Verify the Complete Installation

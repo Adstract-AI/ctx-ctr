@@ -9,10 +9,10 @@
 - Any change to method/function logic or signature that affects behavior must include a docstring update.
 - Use project-specific custom exceptions where appropriate.
 - Add explicit error handling and failure mapping.
-- Environment-controlled variables should be loaded through the project configuration module.
-- Runtime settings must be exposed through the shared configuration module as typed settings fields; other modules should import settings from there instead of reading `os.environ` directly.
-- Every environment variable must have a default value defined in the shared constants module, and the shared configuration module must load each environment variable using that default.
-- Use the project configuration module to load `.env` files; do not duplicate `.env` loading in individual modules.
+- Environment-controlled variables should be loaded through `src/ctx_ctr/env_variables.py`.
+- Runtime settings must be exposed from `env_variables.py` as uppercase module variables; other modules should import those variables instead of reading `os.environ` directly.
+- Every environment variable must have a default value defined in `src/ctx_ctr/constants.py`, and `env_variables.py` must load each environment variable using that default.
+- Use `python-dotenv` only through `env_variables.py` to load `.env` files; do not duplicate `.env` loading in individual modules.
 - Do not write fallback implementations for required dependencies when imports fail. Every dependency listed in project requirements is mandatory, and missing dependencies should fail plainly instead of being silently reimplemented or bypassed.
 - Always use the configured project conda environment for installs, checks, scripts, and Python commands. For this project, use the `big-data` environment unless the user explicitly says otherwise.
 - Shared constants used across multiple parts of the codebase must be defined in the project's shared constants module.

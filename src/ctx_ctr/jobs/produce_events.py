@@ -5,7 +5,14 @@ from __future__ import annotations
 import argparse
 
 from ctx_ctr.adapters.kafka_event_producer import KafkaEventProducerAdapter
-from ctx_ctr.config import load_settings
+from ctx_ctr.env_variables import (
+    CLICK_TOPIC,
+    EVENT_TOPIC,
+    IMPRESSION_TOPIC,
+    KAFKA_BOOTSTRAP_SERVERS,
+    LOG_COLOR,
+    LOG_LEVEL,
+)
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
 from ctx_ctr.models.events import CtrEvent
@@ -46,8 +53,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="simulate without publishing to Kafka")
     args = parser.parse_args()
 
-    settings = load_settings()
-    configure_logging(settings.log_level, settings.log_color)
+    configure_logging(LOG_LEVEL, LOG_COLOR)
     config = EventProducerRunConfig(
         impressions=args.impressions,
         events_per_second=args.events_per_second,
@@ -79,10 +85,10 @@ def main() -> None:
     producer: KafkaEventProducerAdapter | None = None
     try:
         producer = KafkaEventProducerAdapter(
-            bootstrap_servers=settings.kafka_bootstrap_servers,
-            impression_topic=settings.impression_topic,
-            click_topic=settings.click_topic,
-            event_topic=settings.event_topic,
+            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+            impression_topic=IMPRESSION_TOPIC,
+            click_topic=CLICK_TOPIC,
+            event_topic=EVENT_TOPIC,
         )
         service = EventSimulatorService(producer)
         result = service.produce(config)

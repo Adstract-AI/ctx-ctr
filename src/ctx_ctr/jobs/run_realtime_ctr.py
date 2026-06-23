@@ -9,7 +9,15 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ctx_ctr.adapters.redis_ctr_state import RedisCtrStateAdapter
-from ctx_ctr.config import load_settings
+from ctx_ctr.env_variables import (
+    CLICK_TOPIC,
+    DEAD_LETTER_TOPIC,
+    IMPRESSION_TOPIC,
+    KAFKA_BOOTSTRAP_SERVERS,
+    LOG_COLOR,
+    LOG_LEVEL,
+    REDIS_URL,
+)
 from ctx_ctr.exceptions import CtrStateError
 from ctx_ctr.jobs.output import print_failure
 from ctx_ctr.logging_config import configure_logging, get_logger
@@ -42,13 +50,12 @@ class RealtimeCtrJobConfig(BaseModel):
 def main() -> None:
     """Parse CLI arguments and start the realtime CTR Flink job."""
 
-    settings = load_settings()
     parser = argparse.ArgumentParser(description="Run realtime CTR updates with PyFlink.")
-    parser.add_argument("--impression-topic", default=settings.impression_topic)
-    parser.add_argument("--click-topic", default=settings.click_topic)
-    parser.add_argument("--dead-letter-topic", default=settings.dead_letter_topic)
-    parser.add_argument("--bootstrap-servers", default=settings.kafka_bootstrap_servers)
-    parser.add_argument("--redis-url", default=settings.redis_url)
+    parser.add_argument("--impression-topic", default=IMPRESSION_TOPIC)
+    parser.add_argument("--click-topic", default=CLICK_TOPIC)
+    parser.add_argument("--dead-letter-topic", default=DEAD_LETTER_TOPIC)
+    parser.add_argument("--bootstrap-servers", default=KAFKA_BOOTSTRAP_SERVERS)
+    parser.add_argument("--redis-url", default=REDIS_URL)
     parser.add_argument("--consumer-group", default="ctx-ctr-flink-realtime")
     parser.add_argument("--parallelism", type=int, default=1)
     parser.add_argument("--checkpoint-interval-ms", type=int, default=10000)
@@ -65,7 +72,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    configure_logging(settings.log_level, settings.log_color)
+    configure_logging(LOG_LEVEL, LOG_COLOR)
     config = RealtimeCtrJobConfig(
         impression_topic=args.impression_topic,
         click_topic=args.click_topic,
