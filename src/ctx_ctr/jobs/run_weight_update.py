@@ -54,24 +54,32 @@ def main(argv: Sequence[str] | None = None) -> None:
         redis_store = _build_redis_store(config.redis_url)
         with _open_postgres_writer(config.postgres_dsn, config.dry_run) as postgres_writer:
             service = WeightUpdateService(redis_store=redis_store, postgres_writer=postgres_writer)
+            last_result: WeightUpdateResult | None = None
             if config.once:
                 result = service.recalibrate(run_config)
+                last_result = result
                 _log_result(result)
-                print_success(
-                    _result_title(result),
-                    [*_result_lines(result), f"config: {args.config}"],
-                )
+                _print_result_summary(result, config_path=args.config)
                 return
 
             while True:
                 result = service.recalibrate(run_config)
+                last_result = result
                 _log_result(result)
+                _print_result_summary(
+                    result,
+                    config_path=args.config,
+                    extra_lines=[f"next run in seconds: {config.interval_seconds}"],
+                )
                 logger.info(
                     f"Sleeping {config.interval_seconds} seconds before the next weight update run"
                 )
                 time.sleep(config.interval_seconds)
     except KeyboardInterrupt:
-        logger.info("Weight update job stopped")
+        lines = ["status: interrupted by user"]
+        if "last_result" in locals() and last_result is not None:
+            lines.extend(_result_lines(last_result))
+        print_success("Weight update job stopped", lines)
     except Exception as error:
         print_failure("Weight update", error)
         raise
@@ -217,6 +225,24 @@ def _result_lines(result: WeightUpdateResult) -> list[str]:
         f"snapshot id: {result.postgres_snapshot_id if result.postgres_snapshot_id is not None else 'n/a'}",
         f"skipped reason: {result.skipped_reason or 'none'}",
     ]
+
+
+def _print_result_summary(
+    result: WeightUpdateResult,
+    *,
+    config_path: str,
+    extra_lines: list[str] | None = None,
+) -> None:
+    """Print a boxed summary for one weight-update recalibration pass."""
+
+    print_success(
+        _result_title(result),
+        [
+            *_result_lines(result),
+            *(extra_lines or []),
+            f"config: {config_path}",
+        ],
+    )
 
 
 def _log_result(result: WeightUpdateResult) -> None:
