@@ -1,0 +1,68 @@
+"""Typed models for the Task 2 weight-update flow."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from ctx_ctr.models.seed import SeedBucketStatistic, SeedModelSnapshot
+
+
+class RedisBucketScanResult(BaseModel):
+    """Bucket payloads parsed from Redis along with scan counts."""
+
+    scanned_key_count: int = Field(ge=0)
+    valid_bucket_count: int = Field(ge=0)
+    invalid_bucket_count: int = Field(ge=0)
+    buckets: list[SeedBucketStatistic] = Field(default_factory=list)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class WeightUpdateRunConfig(BaseModel):
+    """Runtime controls for one Task 2 recalibration pass."""
+
+    learning_rate: float = Field(gt=0)
+    evidence_smoothing: float = Field(ge=0)
+    ridge: float = Field(ge=0)
+    max_delta: float = Field(gt=0)
+    min_trusted_buckets: int = Field(ge=1)
+    snapshot_name_prefix: str = Field(min_length=1)
+    dry_run: bool = False
+
+    model_config = ConfigDict(frozen=True)
+
+
+class WeightUpdateRunMetrics(BaseModel):
+    """Metrics captured for one Task 2 recalibration pass."""
+
+    input_bucket_count: int = Field(ge=0)
+    valid_bucket_count: int = Field(ge=0)
+    invalid_bucket_count: int = Field(ge=0)
+    trusted_bucket_count: int = Field(ge=0)
+    skipped_bucket_count: int = Field(ge=0)
+    unknown_feature_count: int = Field(ge=0)
+    max_absolute_weight_delta: float = Field(ge=0)
+    learning_rate: float = Field(gt=0)
+    evidence_smoothing: float = Field(ge=0)
+    ridge: float = Field(ge=0)
+    max_delta: float = Field(gt=0)
+    dry_run: bool
+    w0_unchanged: bool
+
+    model_config = ConfigDict(frozen=True)
+
+
+class WeightUpdateResult(BaseModel):
+    """Outcome of one Task 2 recalibration pass."""
+
+    accepted: bool
+    dry_run: bool
+    model_snapshot: SeedModelSnapshot
+    metrics: WeightUpdateRunMetrics
+    redis_write_applied: bool
+    postgres_write_applied: bool
+    snapshot_name: str | None = None
+    postgres_snapshot_id: int | None = None
+    skipped_reason: str | None = None
+
+    model_config = ConfigDict(frozen=True)
