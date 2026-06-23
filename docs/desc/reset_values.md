@@ -8,10 +8,22 @@ Clears seeded PostgreSQL and Redis state.
 python -m ctx_ctr.jobs.reset_values
 ```
 
+Short command:
+
+```bash
+reset-values
+```
+
 Dry-run:
 
 ```bash
 python -m ctx_ctr.jobs.reset_values --dry-run
+```
+
+Default config:
+
+```text
+configs/reset_values.yaml
 ```
 
 ## Purpose
@@ -28,8 +40,15 @@ python -m ctx_ctr.jobs.seed_values
 
 ## Flags
 
+- `--config <path>`: YAML config path. Defaults to `configs/reset_values.yaml`.
 - `--dry-run`: Shows what would be reset and does not connect to PostgreSQL or
   Redis.
+
+CLI flags override values from the YAML config.
+
+## Config Fields
+
+- `dry_run`: Same behavior as `--dry-run`.
 
 ## How It Works
 
@@ -63,4 +82,3 @@ This job does not touch Kafka topics.
 This job does not delete Docker volumes or database schema.
 
 Raw event history in `ctr_events` is not reset by this job.
-

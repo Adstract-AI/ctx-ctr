@@ -8,10 +8,22 @@ Runs the local PyFlink realtime CTR updater.
 python -m ctx_ctr.jobs.run_realtime_ctr
 ```
 
+Short command:
+
+```bash
+realtime-ctr
+```
+
 Example with slower progress logs:
 
 ```bash
 python -m ctx_ctr.jobs.run_realtime_ctr --log-every 500
+```
+
+Default config:
+
+```text
+configs/run_realtime_ctr.yaml
 ```
 
 ## Purpose
@@ -41,6 +53,8 @@ python -m ctx_ctr.jobs.seed_values
 
 ## Flags
 
+- `--config <path>`: YAML config path. Defaults to
+  `configs/run_realtime_ctr.yaml`.
 - `--impression-topic <topic>`: Impression input topic. Defaults to
   `ctr.impressions`.
 - `--click-topic <topic>`: Click input topic. Defaults to `ctr.clicks`.
@@ -59,6 +73,19 @@ python -m ctx_ctr.jobs.seed_values
   the Kafka connector on its classpath.
 - `--log-every <int>`: Log progress every N valid events. Use `0` to disable
   progress logs.
+
+CLI flags override values from the YAML config.
+
+## Config Fields
+
+- `impression_topic`, `click_topic`, `dead_letter_topic`: Kafka topics.
+- `bootstrap_servers`: Kafka bootstrap servers.
+- `redis_url`: Redis URL.
+- `consumer_group`: Kafka consumer group.
+- `parallelism`: PyFlink parallelism.
+- `checkpoint_interval_ms`: Flink checkpoint interval. Use `0` to disable.
+- `kafka_connector_jar`: Optional local Flink Kafka connector jar path.
+- `log_every`: Progress logging interval.
 
 ## Kafka Input
 

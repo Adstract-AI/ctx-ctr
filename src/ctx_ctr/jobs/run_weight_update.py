@@ -7,9 +7,11 @@ import time
 from collections.abc import Sequence
 from contextlib import AbstractContextManager, nullcontext
 
-from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL, POSTGRES_DSN, REDIS_URL
+from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL
+from ctx_ctr.job_config_loader import load_job_config, merge_job_config
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
+from ctx_ctr.models.job_configs import RunWeightUpdateJobConfig
 from ctx_ctr.models.weight_update import WeightUpdateResult, WeightUpdateRunConfig
 from ctx_ctr.services.weight_update_service import (
     WeightUpdatePostgresWriter,
@@ -18,61 +20,56 @@ from ctx_ctr.services.weight_update_service import (
 )
 
 logger = get_logger("ctx_ctr.jobs.run_weight_update")
-
-DEFAULT_INTERVAL_SECONDS = 3600
-DEFAULT_LEARNING_RATE = 0.25
-DEFAULT_EVIDENCE_SMOOTHING = 1000.0
-DEFAULT_RIDGE = 0.01
-DEFAULT_MAX_DELTA = 0.25
-DEFAULT_MIN_TRUSTED_BUCKETS = 1
-DEFAULT_SNAPSHOT_NAME_PREFIX = "flink_weight_update"
+DEFAULT_CONFIG_PATH = "configs/run_weight_update.yaml"
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     """Parse CLI arguments and run the Task 2 periodic weight-update job."""
 
-    parser = _build_parser(REDIS_URL, POSTGRES_DSN)
+    parser = _build_parser()
     args = parser.parse_args(argv)
+    file_config = load_job_config(args.config, RunWeightUpdateJobConfig)
+    config = merge_job_config(file_config, _cli_overrides(args))
     configure_logging(LOG_LEVEL, LOG_COLOR)
 
-    if args.interval_seconds <= 0:
-        parser.error("--interval-seconds must be greater than zero")
-
     run_config = WeightUpdateRunConfig(
-        learning_rate=args.learning_rate,
-        evidence_smoothing=args.evidence_smoothing,
-        ridge=args.ridge,
-        max_delta=args.max_delta,
-        min_trusted_buckets=args.min_trusted_buckets,
-        snapshot_name_prefix=args.snapshot_name_prefix,
-        dry_run=args.dry_run,
+        learning_rate=config.learning_rate,
+        evidence_smoothing=config.evidence_smoothing,
+        ridge=config.ridge,
+        max_delta=config.max_delta,
+        min_trusted_buckets=config.min_trusted_buckets,
+        snapshot_name_prefix=config.snapshot_name_prefix,
+        dry_run=config.dry_run,
     )
     logger.info(
-        f"Configured weight update job: redis_url={args.redis_url}, "
-        f"postgres_dsn={args.postgres_dsn}, once={args.once}, dry_run={args.dry_run}, "
-        f"interval_seconds={args.interval_seconds}, learning_rate={args.learning_rate}, "
-        f"evidence_smoothing={args.evidence_smoothing}, ridge={args.ridge}, "
-        f"max_delta={args.max_delta}, min_trusted_buckets={args.min_trusted_buckets}, "
-        f"snapshot_name_prefix={args.snapshot_name_prefix}"
+        f"Configured weight update job: redis_url={config.redis_url}, "
+        f"postgres_dsn={config.postgres_dsn}, once={config.once}, dry_run={config.dry_run}, "
+        f"interval_seconds={config.interval_seconds}, learning_rate={config.learning_rate}, "
+        f"evidence_smoothing={config.evidence_smoothing}, ridge={config.ridge}, "
+        f"max_delta={config.max_delta}, min_trusted_buckets={config.min_trusted_buckets}, "
+        f"snapshot_name_prefix={config.snapshot_name_prefix}, config={args.config}"
     )
 
     try:
-        redis_store = _build_redis_store(args.redis_url)
-        with _open_postgres_writer(args.postgres_dsn, args.dry_run) as postgres_writer:
+        redis_store = _build_redis_store(config.redis_url)
+        with _open_postgres_writer(config.postgres_dsn, config.dry_run) as postgres_writer:
             service = WeightUpdateService(redis_store=redis_store, postgres_writer=postgres_writer)
-            if args.once:
+            if config.once:
                 result = service.recalibrate(run_config)
                 _log_result(result)
-                print_success(_result_title(result), _result_lines(result))
+                print_success(
+                    _result_title(result),
+                    [*_result_lines(result), f"config: {args.config}"],
+                )
                 return
 
             while True:
                 result = service.recalibrate(run_config)
                 _log_result(result)
                 logger.info(
-                    f"Sleeping {args.interval_seconds} seconds before the next weight update run"
+                    f"Sleeping {config.interval_seconds} seconds before the next weight update run"
                 )
-                time.sleep(args.interval_seconds)
+                time.sleep(config.interval_seconds)
     except KeyboardInterrupt:
         logger.info("Weight update job stopped")
     except Exception as error:
@@ -80,64 +77,94 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise
 
 
-def _build_parser(default_redis_url: str, default_postgres_dsn: str) -> argparse.ArgumentParser:
+def _build_parser() -> argparse.ArgumentParser:
     """Build the CLI parser for the Task 2 weight-update job."""
 
     parser = argparse.ArgumentParser(description="Run the Task 2 weight update job.")
-    parser.add_argument("--redis-url", default=default_redis_url, help="Redis connection URL")
+    parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="path to the job YAML config")
+    parser.add_argument("--redis-url", default=None, help="Redis connection URL")
     parser.add_argument(
         "--postgres-dsn",
-        default=default_postgres_dsn,
+        default=None,
         help="PostgreSQL DSN used for model snapshot history",
     )
     parser.add_argument(
         "--interval-seconds",
         type=int,
-        default=DEFAULT_INTERVAL_SECONDS,
+        default=None,
         help="seconds to wait between periodic recalibration runs",
     )
-    parser.add_argument("--once", action="store_true", help="run one recalibration and exit")
+    parser.add_argument(
+        "--once",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="run one recalibration and exit",
+    )
     parser.add_argument(
         "--learning-rate",
         type=float,
-        default=DEFAULT_LEARNING_RATE,
+        default=None,
         help="base learning rate for feature-family updates",
     )
     parser.add_argument(
         "--evidence-smoothing",
         type=float,
-        default=DEFAULT_EVIDENCE_SMOOTHING,
+        default=None,
         help="evidence smoothing term for the learning rate",
     )
     parser.add_argument(
         "--ridge",
         type=float,
-        default=DEFAULT_RIDGE,
+        default=None,
         help="ridge regularization applied to each feature weight",
     )
     parser.add_argument(
         "--max-delta",
         type=float,
-        default=DEFAULT_MAX_DELTA,
+        default=None,
         help="maximum absolute per-feature update before centering",
     )
     parser.add_argument(
         "--min-trusted-buckets",
         type=int,
-        default=DEFAULT_MIN_TRUSTED_BUCKETS,
+        default=None,
         help="minimum trusted buckets required before a run can write outputs",
     )
     parser.add_argument(
         "--snapshot-name-prefix",
-        default=DEFAULT_SNAPSHOT_NAME_PREFIX,
+        default=None,
         help="prefix used when generating snapshot names",
     )
     parser.add_argument(
         "--dry-run",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="compute Task 2 updates without writing Redis or PostgreSQL",
     )
     return parser
+
+
+def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
+    """Return CLI values explicitly overriding the YAML config."""
+
+    overrides: dict[str, object] = {}
+    for field_name in (
+        "redis_url",
+        "postgres_dsn",
+        "interval_seconds",
+        "once",
+        "learning_rate",
+        "evidence_smoothing",
+        "ridge",
+        "max_delta",
+        "min_trusted_buckets",
+        "snapshot_name_prefix",
+        "dry_run",
+    ):
+        value = getattr(args, field_name)
+        if value is not None:
+            overrides[field_name] = value
+    return overrides
 
 
 def _build_redis_store(redis_url: str) -> WeightUpdateRedisStore:

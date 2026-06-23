@@ -1,0 +1,10 @@
+impression_topic: ctr.impressions
+click_topic: ctr.clicks
+dead_letter_topic: ctr.dead-letter
+bootstrap_servers: localhost:9092
+redis_url: redis://localhost:6379/0
+consumer_group: ctx-ctr-flink-realtime
+parallelism: 1
+checkpoint_interval_ms: 10000
+kafka_connector_jar: null
+log_every: 100

@@ -65,4 +65,4 @@ class WeightUpdateResult(BaseModel):
     postgres_snapshot_id: int | None = None
     skipped_reason: str | None = None
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, protected_namespaces=())

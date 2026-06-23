@@ -91,14 +91,18 @@ Install the `ctx_ctr` package:
 python -m pip install -e .
 ```
 
-Editable mode makes `src/ctx_ctr` importable as `ctx_ctr`. Changes made to the
-source code become available immediately without reinstalling the package.
+Editable mode makes `src/ctx_ctr` importable as `ctx_ctr` and installs the
+short job commands defined in `pyproject.toml`. Changes made to the source code
+become available immediately without reinstalling the package.
 
 Verify the installation:
 
 ```bash
 python -c "import ctx_ctr; print('ctx_ctr import OK')"
 ```
+
+Each job loads defaults from `configs/*.yaml`. CLI flags override values from
+the YAML config.
 
 ## 5. Install Local PyFlink and PySpark
 
@@ -289,32 +293,32 @@ docker compose \
 Validate the deterministic research-demo seed dataset without writing anything:
 
 ```bash
-python -m ctx_ctr.jobs.seed_values --dry-run
+seed-values --dry-run
 ```
 
 Reset Postgres and Redis seed-owned state:
 
 ```bash
-python -m ctx_ctr.jobs.reset_values
+reset-values
 ```
 
 Seed bucket statistics, model weights, and seed metadata:
 
 ```bash
-python -m ctx_ctr.jobs.seed_values
+seed-values
 ```
 
 Kafka topics are handled separately. To delete and recreate all known project
 topics, use:
 
 ```bash
-python -m ctx_ctr.jobs.clean_topics
+clean-topics
 ```
 
 To clean only selected topics:
 
 ```bash
-python -m ctx_ctr.jobs.clean_topics --only ctr.impressions ctr.clicks
+clean-topics --only ctr.impressions ctr.clicks
 ```
 
 Seeded Redis keys use:
@@ -329,19 +333,19 @@ weights:current
 Validate event generation without publishing to Kafka:
 
 ```bash
-python -m ctx_ctr.jobs.produce_events --dry-run --impressions 100
+produce-events --dry-run --impressions 100
 ```
 
 Produce simulated impression and click events to Kafka:
 
 ```bash
-python -m ctx_ctr.jobs.produce_events --impressions 1000 --events-per-second 20
+produce-events --impressions 1000 --events-per-second 20
 ```
 
 Log progress every N produced events:
 
 ```bash
-python -m ctx_ctr.jobs.produce_events --impressions 1000 --events-per-second 20 --log-every 100
+produce-events --impressions 1000 --events-per-second 20 --log-every 100
 ```
 
 Use `--log-every 0` to disable progress logs.
@@ -350,7 +354,7 @@ By default, impressions are published to `ctr.impressions` and clicks are
 published to `ctr.clicks`. To also mirror every event into `ctr.events`, add:
 
 ```bash
-python -m ctx_ctr.jobs.produce_events --impressions 1000 --also-unified
+produce-events --impressions 1000 --also-unified
 ```
 
 ## 14. Stop the Services
