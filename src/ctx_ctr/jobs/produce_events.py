@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 
 from ctx_ctr.adapters.kafka_event_producer import KafkaEventProducerAdapter
 from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL
@@ -27,7 +28,7 @@ class DryRunEventPublisher:
         """Skip producer flush."""
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     """Parse CLI arguments and produce simulated CTR events."""
 
     parser = argparse.ArgumentParser(description="Produce simulated CTR events to Kafka.")
@@ -62,7 +63,7 @@ def main() -> None:
     parser.add_argument("--impression-topic", default=None, help="impression output topic")
     parser.add_argument("--click-topic", default=None, help="click output topic")
     parser.add_argument("--event-topic", default=None, help="unified event output topic")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     file_config = load_job_config(args.config, ProduceEventsJobConfig)
     config = merge_job_config(file_config, _cli_overrides(args))
 
