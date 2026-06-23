@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 from pydantic import ValidationError
 from redis import Redis
@@ -32,7 +33,7 @@ class RedisRuntimeAdapter:
         try:
             for key in self._client.scan_iter(f"{REDIS_CTR_KEY_PREFIX}:*"):
                 scanned_key_count += 1
-                payload = self._client.get(key)
+                payload = cast(str | None, self._client.get(key))
                 if payload is None:
                     invalid_bucket_count += 1
                     logger.debug(f"Redis bucket key {key} disappeared before it could be read")
@@ -63,7 +64,7 @@ class RedisRuntimeAdapter:
         """Read and parse the current model snapshot from Redis."""
 
         try:
-            payload = self._client.get(REDIS_CURRENT_WEIGHTS_KEY)
+            payload = cast(str | None, self._client.get(REDIS_CURRENT_WEIGHTS_KEY))
         except RedisError as error:
             raise WeightUpdateError("Failed to read Redis current weights") from error
 
