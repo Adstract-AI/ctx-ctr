@@ -194,40 +194,6 @@ def test_run_weight_update_disabled_once_enters_periodic_loop_until_keyboard_int
     assert postgres_context.exited is True
 
 
-def test_run_weight_update_supports_task_file_baseline_disable_alias(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    config_path = tmp_path / "run_weight_update.yaml"
-    config_path.write_text(
-        "\n".join(
-            [
-                "redis_url: redis://yaml:6379/0",
-                "postgres_dsn: postgresql://yaml",
-                "baseline_update: true",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    postgres_context = FakePostgresContext(writer=None)
-
-    monkeypatch.setattr(run_weight_update, "_build_redis_store", lambda redis_url: object())
-    monkeypatch.setattr(
-        run_weight_update,
-        "_open_postgres_writer",
-        lambda postgres_dsn, dry_run: postgres_context,
-    )
-    monkeypatch.setattr(run_weight_update, "WeightUpdateService", FakeWeightUpdateService)
-    FakeWeightUpdateService.created = []
-
-    run_weight_update.main(
-        ["--config", str(config_path), "--once", "--dry-run", "--disable-baseline-update"]
-    )
-
-    run_config = FakeWeightUpdateService.created[-1].run_configs[-1]
-    assert run_config.baseline_update is False
-
-
 def test_run_weight_update_invalid_yaml_config_fails_before_building_dependencies(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

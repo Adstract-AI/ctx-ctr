@@ -111,12 +111,6 @@ feature-family weights, disable baseline updates:
 python -m ctx_ctr.jobs.run_weight_update --once --no-baseline-update
 ```
 
-The task-file alias is also supported:
-
-```bash
-python -m ctx_ctr.jobs.run_weight_update --once --disable-baseline-update
-```
-
 When disabled, `w0` and `metrics.baseline_ctr` remain unchanged, while accepted
 feature-family updates may still write Redis and PostgreSQL snapshots.
 
@@ -136,8 +130,6 @@ feature-family updates may still write Redis and PostgreSQL snapshots.
 - `--snapshot-name-prefix`: default `flink_weight_update`
 - `--baseline-update` / `--no-baseline-update`: enable or disable global
   baseline updates. Default `true`.
-- `--update-baseline`: alias for `--baseline-update`
-- `--disable-baseline-update`: alias for `--no-baseline-update`
 - `--baseline-learning-rate`: default `0.10`
 - `--baseline-evidence-smoothing`: default `5000`
 - `--baseline-max-delta`: default `0.10`

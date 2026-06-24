@@ -162,20 +162,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="enable or disable global baseline w0 updates",
     )
     parser.add_argument(
-        "--update-baseline",
-        action="store_true",
-        default=None,
-        dest="baseline_update",
-        help="alias for --baseline-update",
-    )
-    parser.add_argument(
-        "--disable-baseline-update",
-        action="store_false",
-        default=None,
-        dest="baseline_update",
-        help="alias for --no-baseline-update",
-    )
-    parser.add_argument(
         "--baseline-learning-rate",
         type=float,
         default=None,
