@@ -39,6 +39,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         max_delta=config.max_delta,
         min_trusted_buckets=config.min_trusted_buckets,
         snapshot_name_prefix=config.snapshot_name_prefix,
+        baseline_update=config.baseline_update,
+        baseline_learning_rate=config.baseline_learning_rate,
+        baseline_evidence_smoothing=config.baseline_evidence_smoothing,
+        baseline_max_delta=config.baseline_max_delta,
+        baseline_min_impressions=config.baseline_min_impressions,
+        baseline_max_ci_width=config.baseline_max_ci_width,
         dry_run=config.dry_run,
     )
     logger.info(
@@ -47,6 +53,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         f"interval_seconds={config.interval_seconds}, learning_rate={config.learning_rate}, "
         f"evidence_smoothing={config.evidence_smoothing}, ridge={config.ridge}, "
         f"max_delta={config.max_delta}, min_trusted_buckets={config.min_trusted_buckets}, "
+        f"baseline_update={config.baseline_update}, "
+        f"baseline_learning_rate={config.baseline_learning_rate}, "
+        f"baseline_evidence_smoothing={config.baseline_evidence_smoothing}, "
+        f"baseline_max_delta={config.baseline_max_delta}, "
+        f"baseline_min_impressions={config.baseline_min_impressions}, "
+        f"baseline_max_ci_width={config.baseline_max_ci_width}, "
         f"snapshot_name_prefix={config.snapshot_name_prefix}, config={args.config}"
     )
 
@@ -144,6 +156,56 @@ def _build_parser() -> argparse.ArgumentParser:
         help="prefix used when generating snapshot names",
     )
     parser.add_argument(
+        "--baseline-update",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="enable or disable global baseline w0 updates",
+    )
+    parser.add_argument(
+        "--update-baseline",
+        action="store_true",
+        default=None,
+        dest="baseline_update",
+        help="alias for --baseline-update",
+    )
+    parser.add_argument(
+        "--disable-baseline-update",
+        action="store_false",
+        default=None,
+        dest="baseline_update",
+        help="alias for --no-baseline-update",
+    )
+    parser.add_argument(
+        "--baseline-learning-rate",
+        type=float,
+        default=None,
+        help="base learning rate for global baseline updates",
+    )
+    parser.add_argument(
+        "--baseline-evidence-smoothing",
+        type=float,
+        default=None,
+        help="evidence smoothing term for the baseline learning rate",
+    )
+    parser.add_argument(
+        "--baseline-max-delta",
+        type=float,
+        default=None,
+        help="maximum absolute global baseline update",
+    )
+    parser.add_argument(
+        "--baseline-min-impressions",
+        type=int,
+        default=None,
+        help="minimum global impressions required before updating the baseline",
+    )
+    parser.add_argument(
+        "--baseline-max-ci-width",
+        type=float,
+        default=None,
+        help="maximum posterior confidence interval width allowed for baseline updates",
+    )
+    parser.add_argument(
         "--dry-run",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -167,6 +229,12 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
         "max_delta",
         "min_trusted_buckets",
         "snapshot_name_prefix",
+        "baseline_update",
+        "baseline_learning_rate",
+        "baseline_evidence_smoothing",
+        "baseline_max_delta",
+        "baseline_min_impressions",
+        "baseline_max_ci_width",
         "dry_run",
     ):
         value = getattr(args, field_name)
@@ -218,11 +286,21 @@ def _result_lines(result: WeightUpdateResult) -> list[str]:
         f"skipped/untrusted buckets: {result.metrics.skipped_bucket_count}",
         f"unknown feature values initialized: {result.metrics.unknown_feature_count}",
         f"w0 unchanged: {result.metrics.w0_unchanged}",
+        f"baseline update enabled: {result.metrics.baseline_update_enabled}",
+        f"baseline update applied: {result.metrics.baseline_update_applied}",
+        f"old w0: {result.metrics.old_w0:.6f}",
+        f"new w0: {result.metrics.new_w0:.6f}",
+        f"baseline delta: {result.metrics.baseline_delta:.6f}",
+        f"aggregate impressions/clicks: "
+        f"{result.metrics.aggregate_impressions}/{result.metrics.aggregate_clicks}",
+        f"baseline ci width: {result.metrics.baseline_ci_width:.6f}",
+        f"baseline guard reason: {result.metrics.baseline_guard_reason}",
         f"max absolute weight delta: {result.metrics.max_absolute_weight_delta:.6f}",
         f"redis write status: {result.redis_write_applied}",
         f"postgres snapshot status: {result.postgres_write_applied}",
         f"snapshot name: {result.snapshot_name or 'not generated'}",
-        f"snapshot id: {result.postgres_snapshot_id if result.postgres_snapshot_id is not None else 'n/a'}",
+        "snapshot id: "
+        f"{result.postgres_snapshot_id if result.postgres_snapshot_id is not None else 'n/a'}",
         f"skipped reason: {result.skipped_reason or 'none'}",
     ]
 
@@ -250,15 +328,27 @@ def _log_result(result: WeightUpdateResult) -> None:
 
     logger.info(
         f"Weight update summary: scanned={result.metrics.input_bucket_count}, "
-        f"valid={result.metrics.valid_bucket_count}, invalid={result.metrics.invalid_bucket_count}, "
-        f"trusted={result.metrics.trusted_bucket_count}, skipped={result.metrics.skipped_bucket_count}, "
+        f"valid={result.metrics.valid_bucket_count}, "
+        f"invalid={result.metrics.invalid_bucket_count}, "
+        f"trusted={result.metrics.trusted_bucket_count}, "
+        f"skipped={result.metrics.skipped_bucket_count}, "
         f"unknown_features={result.metrics.unknown_feature_count}, "
         f"w0_unchanged={result.metrics.w0_unchanged}, "
+        f"baseline_update={result.metrics.baseline_update_enabled}, "
+        f"baseline_applied={result.metrics.baseline_update_applied}, "
+        f"old_w0={result.metrics.old_w0:.6f}, "
+        f"new_w0={result.metrics.new_w0:.6f}, "
+        f"baseline_delta={result.metrics.baseline_delta:.6f}, "
+        f"aggregate_impressions={result.metrics.aggregate_impressions}, "
+        f"aggregate_clicks={result.metrics.aggregate_clicks}, "
+        f"baseline_ci_width={result.metrics.baseline_ci_width:.6f}, "
+        f"baseline_guard={result.metrics.baseline_guard_reason}, "
         f"max_delta={result.metrics.max_absolute_weight_delta:.6f}, "
         f"redis_write={result.redis_write_applied}, "
         f"postgres_write={result.postgres_write_applied}, "
         f"snapshot_name={result.snapshot_name or 'not_generated'}, "
-        f"snapshot_id={result.postgres_snapshot_id if result.postgres_snapshot_id is not None else 'n/a'}"
+        "snapshot_id="
+        f"{result.postgres_snapshot_id if result.postgres_snapshot_id is not None else 'n/a'}"
     )
 
 

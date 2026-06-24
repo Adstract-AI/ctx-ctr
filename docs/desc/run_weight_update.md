@@ -1,7 +1,7 @@
 # run_weight_update
 
-Periodically recalibrates Task 2 feature-family weights from Redis CTR bucket
-statistics.
+Periodically recalibrates feature-family weights and, by default, the global
+baseline `w0` from Redis CTR bucket statistics.
 
 ## Command
 
@@ -40,10 +40,10 @@ configs/run_weight_update.yaml
 Use this job after `seed_values` or after the Task 1 CTR updater has populated
 Redis bucket statistics.
 
-It reads the current model from Redis, learns only from trusted bucket
-statistics, updates `w_ad`, `w_dom`, and `w_ctx`, keeps `w0` unchanged, writes
-the updated current model back to Redis, and stores a model snapshot in
-PostgreSQL.
+It reads the current model from Redis, learns feature-family weights from
+trusted bucket statistics, updates `w_ad`, `w_dom`, and `w_ctx`, and updates the
+global baseline `w0` when baseline evidence guards pass. Accepted runs write one
+coherent current model back to Redis and store one model snapshot in PostgreSQL.
 
 ## Required Services
 
@@ -64,10 +64,11 @@ Bucket payloads must stay compatible with
 
 - overwrites `weights:current`
 
-The Redis model payload keeps:
+The accepted Redis model payload includes:
 
-- `w0` unchanged
-- `metrics.baseline_ctr` unchanged
+- updated `w0`
+- updated `w_ad`, `w_dom`, and `w_ctx`
+- updated `metrics.baseline_ctr`
 - `metrics.prior_strength` unchanged
 
 ## PostgreSQL Output
@@ -77,11 +78,13 @@ The Redis model payload keeps:
 
 The inserted row stores:
 
-- unchanged `w0`
+- updated `w0`
 - updated `w_ad`, `w_dom`, `w_ctx`
 - run metrics in the JSONB `metrics` column
 
 ## Learning Rules
+
+Feature-weight learning:
 
 - use only buckets where `trusted == true`
 - clip bucket CTR before `logit`
@@ -91,12 +94,31 @@ The inserted row stores:
   clipping
 - re-center each family so its mean stays zero
 
-## Why `w0` Is Not Updated
+Baseline learning:
 
-Task 2 updates only feature-family weights.
+- use all valid buckets where `impressions > 0` and `clicks <= impressions`
+- aggregate global impressions and clicks
+- combine the aggregate evidence with the current baseline prior
+- update `w0` only when minimum-impression and confidence-interval guards pass
+- skip the whole model write when baseline update is enabled but guards fail
 
-Global baseline learning for `w0` is intentionally out of scope here and
-belongs to Task 3.
+## Disabling Baseline Updates
+
+Baseline updates are enabled by default. To keep Task 2 behavior and update only
+feature-family weights, disable baseline updates:
+
+```bash
+python -m ctx_ctr.jobs.run_weight_update --once --no-baseline-update
+```
+
+The task-file alias is also supported:
+
+```bash
+python -m ctx_ctr.jobs.run_weight_update --once --disable-baseline-update
+```
+
+When disabled, `w0` and `metrics.baseline_ctr` remain unchanged, while accepted
+feature-family updates may still write Redis and PostgreSQL snapshots.
 
 ## Flags
 
@@ -112,6 +134,15 @@ belongs to Task 3.
 - `--max-delta`: default `0.25`
 - `--min-trusted-buckets`: default `1`
 - `--snapshot-name-prefix`: default `flink_weight_update`
+- `--baseline-update` / `--no-baseline-update`: enable or disable global
+  baseline updates. Default `true`.
+- `--update-baseline`: alias for `--baseline-update`
+- `--disable-baseline-update`: alias for `--no-baseline-update`
+- `--baseline-learning-rate`: default `0.10`
+- `--baseline-evidence-smoothing`: default `5000`
+- `--baseline-max-delta`: default `0.10`
+- `--baseline-min-impressions`: default `1000`
+- `--baseline-max-ci-width`: default `0.02`
 - `--dry-run`: compute updates without writing Redis or PostgreSQL
 
 CLI flags override values from the YAML config.
@@ -123,6 +154,10 @@ CLI flags override values from the YAML config.
 - `once`: Run one recalibration and exit.
 - `learning_rate`, `evidence_smoothing`, `ridge`, `max_delta`,
   `min_trusted_buckets`, `snapshot_name_prefix`: Weight-learning controls.
+- `baseline_update`: Enable global baseline updates.
+- `baseline_learning_rate`, `baseline_evidence_smoothing`,
+  `baseline_max_delta`, `baseline_min_impressions`,
+  `baseline_max_ci_width`: Baseline-learning controls and guards.
 - `dry_run`: Compute without writing Redis or PostgreSQL.
 
 ## Example Verification
@@ -145,6 +180,7 @@ docker compose -f docker-compose.yml exec postgres \
 
 - dry-run mode still reads Redis but does not write Redis or PostgreSQL
 - if fewer than `--min-trusted-buckets` are available, the run is skipped
+- if baseline guards fail while baseline updates are enabled, the whole model
+  write is skipped so no partial feature-only snapshot is published
 - this job does not update Redis bucket priors
-- this job does not update `w0`
 - this job does not use Spark

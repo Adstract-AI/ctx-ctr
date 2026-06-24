@@ -8,7 +8,11 @@ import pytest
 
 from ctx_ctr.jobs import run_weight_update
 from ctx_ctr.models.seed import SeedModelMetrics, SeedModelSnapshot, SeedWeights
-from ctx_ctr.models.weight_update import WeightUpdateResult, WeightUpdateRunConfig, WeightUpdateRunMetrics
+from ctx_ctr.models.weight_update import (
+    WeightUpdateResult,
+    WeightUpdateRunConfig,
+    WeightUpdateRunMetrics,
+)
 
 
 class FakePostgresContext(AbstractContextManager[object | None]):
@@ -63,6 +67,12 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
                 "max_delta: 0.04",
                 "min_trusted_buckets: 2",
                 "snapshot_name_prefix: yaml_prefix",
+                "baseline_update: true",
+                "baseline_learning_rate: 0.12",
+                "baseline_evidence_smoothing: 333.0",
+                "baseline_max_delta: 0.05",
+                "baseline_min_impressions: 444",
+                "baseline_max_ci_width: 0.06",
                 "dry_run: false",
             ]
         ),
@@ -71,7 +81,11 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
     calls: dict[str, object] = {}
     postgres_context = FakePostgresContext(writer=object())
 
-    monkeypatch.setattr(run_weight_update, "_build_redis_store", lambda redis_url: calls.setdefault("redis_url", redis_url))
+    monkeypatch.setattr(
+        run_weight_update,
+        "_build_redis_store",
+        lambda redis_url: calls.setdefault("redis_url", redis_url),
+    )
     monkeypatch.setattr(
         run_weight_update,
         "_open_postgres_writer",
@@ -92,6 +106,9 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
             "--dry-run",
             "--learning-rate",
             "0.25",
+            "--no-baseline-update",
+            "--baseline-max-delta",
+            "0.07",
             "--redis-url",
             "redis://cli:6379/0",
         ]
@@ -112,8 +129,15 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
     assert run_config.max_delta == 0.04
     assert run_config.min_trusted_buckets == 2
     assert run_config.snapshot_name_prefix == "yaml_prefix"
+    assert run_config.baseline_update is False
+    assert run_config.baseline_learning_rate == 0.12
+    assert run_config.baseline_evidence_smoothing == 333.0
+    assert run_config.baseline_max_delta == 0.07
+    assert run_config.baseline_min_impressions == 444
+    assert run_config.baseline_max_ci_width == 0.06
     assert run_config.dry_run is True
     assert "Weight update dry-run" in output
+    assert "baseline update enabled: False" in output
     assert "Config" in output
     assert str(config_path) in output
 
@@ -136,6 +160,12 @@ def test_run_weight_update_disabled_once_enters_periodic_loop_until_keyboard_int
                 "max_delta: 0.25",
                 "min_trusted_buckets: 1",
                 "snapshot_name_prefix: yaml_prefix",
+                "baseline_update: true",
+                "baseline_learning_rate: 0.10",
+                "baseline_evidence_smoothing: 5000.0",
+                "baseline_max_delta: 0.10",
+                "baseline_min_impressions: 1000",
+                "baseline_max_ci_width: 0.02",
                 "dry_run: true",
             ]
         ),
@@ -144,7 +174,11 @@ def test_run_weight_update_disabled_once_enters_periodic_loop_until_keyboard_int
     postgres_context = FakePostgresContext(writer=None)
 
     monkeypatch.setattr(run_weight_update, "_build_redis_store", lambda redis_url: object())
-    monkeypatch.setattr(run_weight_update, "_open_postgres_writer", lambda postgres_dsn, dry_run: postgres_context)
+    monkeypatch.setattr(
+        run_weight_update,
+        "_open_postgres_writer",
+        lambda postgres_dsn, dry_run: postgres_context,
+    )
     monkeypatch.setattr(run_weight_update, "WeightUpdateService", FakeWeightUpdateService)
     monkeypatch.setattr(
         run_weight_update.time,
@@ -158,6 +192,40 @@ def test_run_weight_update_disabled_once_enters_periodic_loop_until_keyboard_int
     assert len(FakeWeightUpdateService.created) == 1
     assert len(FakeWeightUpdateService.created[0].run_configs) == 1
     assert postgres_context.exited is True
+
+
+def test_run_weight_update_supports_task_file_baseline_disable_alias(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "run_weight_update.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "redis_url: redis://yaml:6379/0",
+                "postgres_dsn: postgresql://yaml",
+                "baseline_update: true",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    postgres_context = FakePostgresContext(writer=None)
+
+    monkeypatch.setattr(run_weight_update, "_build_redis_store", lambda redis_url: object())
+    monkeypatch.setattr(
+        run_weight_update,
+        "_open_postgres_writer",
+        lambda postgres_dsn, dry_run: postgres_context,
+    )
+    monkeypatch.setattr(run_weight_update, "WeightUpdateService", FakeWeightUpdateService)
+    FakeWeightUpdateService.created = []
+
+    run_weight_update.main(
+        ["--config", str(config_path), "--once", "--dry-run", "--disable-baseline-update"]
+    )
+
+    run_config = FakeWeightUpdateService.created[-1].run_configs[-1]
+    assert run_config.baseline_update is False
 
 
 def test_run_weight_update_invalid_yaml_config_fails_before_building_dependencies(
@@ -210,6 +278,25 @@ def build_result(config: WeightUpdateRunConfig) -> WeightUpdateResult:
             max_delta=config.max_delta,
             dry_run=config.dry_run,
             w0_unchanged=True,
+            old_w0=snapshot.w0,
+            new_w0=snapshot.w0,
+            baseline_delta=0.0,
+            baseline_update_enabled=config.baseline_update,
+            baseline_update_applied=False,
+            aggregate_impressions=1200,
+            aggregate_clicks=24,
+            aggregate_observed_ctr=0.02,
+            posterior_baseline_ctr=0.02,
+            baseline_ci_low=0.01,
+            baseline_ci_high=0.03,
+            baseline_ci_width=0.02,
+            baseline_guard_reason=(
+                "baseline_guards_passed"
+                if config.baseline_update
+                else "baseline_update_disabled"
+            ),
+            valid_baseline_bucket_count=3,
+            invalid_baseline_bucket_count=0,
         ),
         redis_write_applied=not config.dry_run,
         postgres_write_applied=not config.dry_run,

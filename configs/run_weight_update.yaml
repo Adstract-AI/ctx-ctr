@@ -8,4 +8,10 @@ ridge: 0.01
 max_delta: 0.25
 min_trusted_buckets: 1
 snapshot_name_prefix: flink_weight_update
+baseline_update: true
+baseline_learning_rate: 0.10
+baseline_evidence_smoothing: 5000.0
+baseline_max_delta: 0.10
+baseline_min_impressions: 1000
+baseline_max_ci_width: 0.02
 dry_run: false

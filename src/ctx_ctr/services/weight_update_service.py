@@ -2,20 +2,31 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Protocol
 
 from ctx_ctr.exceptions import WeightUpdateError
 from ctx_ctr.logging_config import get_logger
-from ctx_ctr.models.seed import SeedBucketStatistic, SeedModelSnapshot, SeedWeights
+from ctx_ctr.models.seed import (
+    SeedBucketStatistic,
+    SeedModelMetrics,
+    SeedModelSnapshot,
+    SeedWeights,
+)
 from ctx_ctr.models.weight_update import (
     RedisBucketScanResult,
     WeightUpdateResult,
     WeightUpdateRunConfig,
     WeightUpdateRunMetrics,
 )
-from ctx_ctr.services.ctr_math import clip_value, safe_logit
+from ctx_ctr.services.ctr_math import (
+    beta_variance,
+    clip_value,
+    clipped_confidence_interval,
+    safe_logit,
+    sigmoid,
+)
 
 logger = get_logger(__name__)
 
@@ -60,8 +71,29 @@ class WeightedTargetAggregate:
         return self.weighted_target_sum / self.impressions
 
 
+@dataclass(frozen=True)
+class BaselineUpdateProposal:
+    """Computed global baseline update and audit values for one run."""
+
+    old_w0: float
+    new_w0: float
+    baseline_delta: float
+    update_enabled: bool
+    update_applied: bool
+    aggregate_impressions: int
+    aggregate_clicks: int
+    aggregate_observed_ctr: float
+    posterior_baseline_ctr: float
+    ci_low: float
+    ci_high: float
+    ci_width: float
+    guard_reason: str
+    valid_bucket_count: int
+    invalid_bucket_count: int
+
+
 class WeightUpdateService:
-    """Learn Task 2 feature-family weights from trusted Redis bucket statistics."""
+    """Learn feature-family weights and the global baseline from Redis bucket statistics."""
 
     def __init__(
         self,
@@ -72,12 +104,18 @@ class WeightUpdateService:
         self._postgres_writer = postgres_writer
 
     def recalibrate(self, config: WeightUpdateRunConfig) -> WeightUpdateResult:
-        """Run one Task 2 recalibration pass from Redis to Redis/PostgreSQL."""
+        """Run one recalibration pass from Redis to Redis/PostgreSQL."""
 
         scan_result = self._redis_store.scan_bucket_statistics()
         current_model = self._redis_store.read_current_weights()
         trusted_buckets = [bucket for bucket in scan_result.buckets if bucket.trusted]
         skipped_bucket_count = scan_result.valid_bucket_count - len(trusted_buckets)
+        baseline_proposal = self._build_baseline_update_proposal(
+            current_model=current_model,
+            buckets=scan_result.buckets,
+            scan_invalid_bucket_count=scan_result.invalid_bucket_count,
+            config=config,
+        )
 
         logger.info(
             f"Weight update bucket scan: scanned={scan_result.scanned_key_count}, "
@@ -87,12 +125,24 @@ class WeightUpdateService:
             f"Weight update trusted buckets: trusted={len(trusted_buckets)}, "
             f"skipped={skipped_bucket_count}"
         )
+        logger.info(
+            f"Baseline update enabled={config.baseline_update}, "
+            f"aggregate_impressions={baseline_proposal.aggregate_impressions}, "
+            f"aggregate_clicks={baseline_proposal.aggregate_clicks}, "
+            f"aggregate_observed_ctr={baseline_proposal.aggregate_observed_ctr:.6f}, "
+            f"ci_width={baseline_proposal.ci_width:.6f}, "
+            f"delta={baseline_proposal.baseline_delta:.6f}, "
+            f"guard={baseline_proposal.guard_reason}"
+        )
 
         ad_weights, domain_weights, context_weights, unknown_feature_count = (
             self._prepare_weight_families(current_model, trusted_buckets)
         )
 
         if len(trusted_buckets) < config.min_trusted_buckets:
+            skipped_baseline_proposal = self._without_accepted_baseline_update(
+                baseline_proposal
+            )
             metrics = self._build_metrics(
                 scan_result=scan_result,
                 trusted_bucket_count=len(trusted_buckets),
@@ -100,7 +150,7 @@ class WeightUpdateService:
                 unknown_feature_count=unknown_feature_count,
                 max_absolute_weight_delta=0.0,
                 config=config,
-                w0_unchanged=True,
+                baseline_proposal=skipped_baseline_proposal,
             )
             logger.warning(
                 f"Skipping weight update because trusted buckets "
@@ -114,6 +164,30 @@ class WeightUpdateService:
                 redis_write_applied=False,
                 postgres_write_applied=False,
                 skipped_reason="insufficient_trusted_buckets",
+            )
+
+        if config.baseline_update and not baseline_proposal.update_applied:
+            metrics = self._build_metrics(
+                scan_result=scan_result,
+                trusted_bucket_count=len(trusted_buckets),
+                skipped_bucket_count=skipped_bucket_count,
+                unknown_feature_count=unknown_feature_count,
+                max_absolute_weight_delta=0.0,
+                config=config,
+                baseline_proposal=baseline_proposal,
+            )
+            logger.warning(
+                f"Skipping weight update because baseline guard failed: "
+                f"{baseline_proposal.guard_reason}"
+            )
+            return WeightUpdateResult(
+                accepted=False,
+                dry_run=config.dry_run,
+                model_snapshot=current_model,
+                metrics=metrics,
+                redis_write_applied=False,
+                postgres_write_applied=False,
+                skipped_reason=f"baseline_guard_failed:{baseline_proposal.guard_reason}",
             )
 
         ad_targets, domain_targets, context_targets = self._build_target_aggregates(
@@ -140,17 +214,24 @@ class WeightUpdateService:
         )
 
         snapshot_name = self._build_snapshot_name(config.snapshot_name_prefix)
+        updated_metrics = SeedModelMetrics(
+            baseline_ctr=(
+                sigmoid(baseline_proposal.new_w0)
+                if config.baseline_update
+                else current_model.metrics.baseline_ctr
+            ),
+            prior_strength=current_model.metrics.prior_strength,
+        )
         updated_snapshot = SeedModelSnapshot(
             snapshot_name=snapshot_name,
-            w0=current_model.w0,
+            w0=baseline_proposal.new_w0,
             weights=SeedWeights(
                 w_ad=updated_ad_weights,
                 w_dom=updated_domain_weights,
                 w_ctx=updated_context_weights,
             ),
-            metrics=current_model.metrics,
+            metrics=updated_metrics,
         )
-        w0_unchanged = updated_snapshot.w0 == current_model.w0
         max_absolute_weight_delta = max(ad_max_delta, domain_max_delta, context_max_delta)
         metrics = self._build_metrics(
             scan_result=scan_result,
@@ -159,7 +240,7 @@ class WeightUpdateService:
             unknown_feature_count=unknown_feature_count,
             max_absolute_weight_delta=max_absolute_weight_delta,
             config=config,
-            w0_unchanged=w0_unchanged,
+            baseline_proposal=baseline_proposal,
         )
 
         redis_write_applied = False
@@ -195,6 +276,141 @@ class WeightUpdateService:
             postgres_write_applied=postgres_write_applied,
             snapshot_name=snapshot_name,
             postgres_snapshot_id=postgres_snapshot_id,
+        )
+
+    def _build_baseline_update_proposal(
+        self,
+        *,
+        current_model: SeedModelSnapshot,
+        buckets: list[SeedBucketStatistic],
+        scan_invalid_bucket_count: int,
+        config: WeightUpdateRunConfig,
+    ) -> BaselineUpdateProposal:
+        """Compute the optional global baseline update from valid bucket evidence."""
+
+        valid_buckets = [
+            bucket
+            for bucket in buckets
+            if bucket.impressions > 0 and bucket.clicks <= bucket.impressions
+        ]
+        parsed_invalid_bucket_count = len(buckets) - len(valid_buckets)
+        aggregate_impressions = sum(bucket.impressions for bucket in valid_buckets)
+        aggregate_clicks = sum(bucket.clicks for bucket in valid_buckets)
+        aggregate_observed_ctr = (
+            aggregate_clicks / aggregate_impressions if aggregate_impressions > 0 else 0.0
+        )
+
+        old_w0 = current_model.w0
+        old_baseline_ctr = sigmoid(old_w0)
+        prior_strength = current_model.metrics.prior_strength
+        alpha_prior = old_baseline_ctr * prior_strength
+        beta_prior = (1.0 - old_baseline_ctr) * prior_strength
+        alpha_posterior = alpha_prior + aggregate_clicks
+        beta_posterior = beta_prior + aggregate_impressions - aggregate_clicks
+        posterior_baseline_ctr = alpha_posterior / (alpha_posterior + beta_posterior)
+        variance = beta_variance(alpha_posterior, beta_posterior)
+        ci_low, ci_high = clipped_confidence_interval(posterior_baseline_ctr, variance, 1.96)
+        ci_width = ci_high - ci_low
+
+        if not config.baseline_update:
+            return BaselineUpdateProposal(
+                old_w0=old_w0,
+                new_w0=old_w0,
+                baseline_delta=0.0,
+                update_enabled=False,
+                update_applied=False,
+                aggregate_impressions=aggregate_impressions,
+                aggregate_clicks=aggregate_clicks,
+                aggregate_observed_ctr=aggregate_observed_ctr,
+                posterior_baseline_ctr=posterior_baseline_ctr,
+                ci_low=ci_low,
+                ci_high=ci_high,
+                ci_width=ci_width,
+                guard_reason="baseline_update_disabled",
+                valid_bucket_count=len(valid_buckets),
+                invalid_bucket_count=scan_invalid_bucket_count + parsed_invalid_bucket_count,
+            )
+
+        if aggregate_impressions < config.baseline_min_impressions:
+            return BaselineUpdateProposal(
+                old_w0=old_w0,
+                new_w0=old_w0,
+                baseline_delta=0.0,
+                update_enabled=True,
+                update_applied=False,
+                aggregate_impressions=aggregate_impressions,
+                aggregate_clicks=aggregate_clicks,
+                aggregate_observed_ctr=aggregate_observed_ctr,
+                posterior_baseline_ctr=posterior_baseline_ctr,
+                ci_low=ci_low,
+                ci_high=ci_high,
+                ci_width=ci_width,
+                guard_reason="insufficient_baseline_impressions",
+                valid_bucket_count=len(valid_buckets),
+                invalid_bucket_count=scan_invalid_bucket_count + parsed_invalid_bucket_count,
+            )
+
+        if ci_width > config.baseline_max_ci_width:
+            return BaselineUpdateProposal(
+                old_w0=old_w0,
+                new_w0=old_w0,
+                baseline_delta=0.0,
+                update_enabled=True,
+                update_applied=False,
+                aggregate_impressions=aggregate_impressions,
+                aggregate_clicks=aggregate_clicks,
+                aggregate_observed_ctr=aggregate_observed_ctr,
+                posterior_baseline_ctr=posterior_baseline_ctr,
+                ci_low=ci_low,
+                ci_high=ci_high,
+                ci_width=ci_width,
+                guard_reason="baseline_ci_width_too_wide",
+                valid_bucket_count=len(valid_buckets),
+                invalid_bucket_count=scan_invalid_bucket_count + parsed_invalid_bucket_count,
+            )
+
+        target_w0 = safe_logit(posterior_baseline_ctr)
+        eta = (
+            config.baseline_learning_rate
+            * aggregate_impressions
+            / (aggregate_impressions + config.baseline_evidence_smoothing)
+        )
+        raw_delta = eta * (target_w0 - old_w0)
+        delta = clip_value(
+            raw_delta,
+            -config.baseline_max_delta,
+            config.baseline_max_delta,
+        )
+        new_w0 = old_w0 + delta
+        return BaselineUpdateProposal(
+            old_w0=old_w0,
+            new_w0=new_w0,
+            baseline_delta=delta,
+            update_enabled=True,
+            update_applied=True,
+            aggregate_impressions=aggregate_impressions,
+            aggregate_clicks=aggregate_clicks,
+            aggregate_observed_ctr=aggregate_observed_ctr,
+            posterior_baseline_ctr=posterior_baseline_ctr,
+            ci_low=ci_low,
+            ci_high=ci_high,
+            ci_width=ci_width,
+            guard_reason="baseline_guards_passed",
+            valid_bucket_count=len(valid_buckets),
+            invalid_bucket_count=scan_invalid_bucket_count + parsed_invalid_bucket_count,
+        )
+
+    def _without_accepted_baseline_update(
+        self,
+        baseline_proposal: BaselineUpdateProposal,
+    ) -> BaselineUpdateProposal:
+        """Return baseline metrics for a run where no model snapshot is accepted."""
+
+        return replace(
+            baseline_proposal,
+            new_w0=baseline_proposal.old_w0,
+            baseline_delta=0.0,
+            update_applied=False,
         )
 
     def _prepare_weight_families(
@@ -325,7 +541,7 @@ class WeightUpdateService:
         unknown_feature_count: int,
         max_absolute_weight_delta: float,
         config: WeightUpdateRunConfig,
-        w0_unchanged: bool,
+        baseline_proposal: BaselineUpdateProposal,
     ) -> WeightUpdateRunMetrics:
         """Build the metrics payload recorded for the current run."""
 
@@ -342,7 +558,22 @@ class WeightUpdateService:
             ridge=config.ridge,
             max_delta=config.max_delta,
             dry_run=config.dry_run,
-            w0_unchanged=w0_unchanged,
+            w0_unchanged=baseline_proposal.new_w0 == baseline_proposal.old_w0,
+            old_w0=baseline_proposal.old_w0,
+            new_w0=baseline_proposal.new_w0,
+            baseline_delta=baseline_proposal.baseline_delta,
+            baseline_update_enabled=baseline_proposal.update_enabled,
+            baseline_update_applied=baseline_proposal.update_applied,
+            aggregate_impressions=baseline_proposal.aggregate_impressions,
+            aggregate_clicks=baseline_proposal.aggregate_clicks,
+            aggregate_observed_ctr=baseline_proposal.aggregate_observed_ctr,
+            posterior_baseline_ctr=baseline_proposal.posterior_baseline_ctr,
+            baseline_ci_low=baseline_proposal.ci_low,
+            baseline_ci_high=baseline_proposal.ci_high,
+            baseline_ci_width=baseline_proposal.ci_width,
+            baseline_guard_reason=baseline_proposal.guard_reason,
+            valid_baseline_bucket_count=baseline_proposal.valid_bucket_count,
+            invalid_baseline_bucket_count=baseline_proposal.invalid_bucket_count,
         )
 
     def _build_snapshot_name(self, snapshot_name_prefix: str) -> str:
