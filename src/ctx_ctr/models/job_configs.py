@@ -24,9 +24,6 @@ from ctx_ctr.env_variables import (
     DEAD_LETTER_TOPIC,
     EVENT_TOPIC,
     IMPRESSION_TOPIC,
-    KAFKA_BOOTSTRAP_SERVERS,
-    POSTGRES_DSN,
-    REDIS_URL,
 )
 
 
@@ -57,7 +54,6 @@ class CleanTopicsJobConfig(BaseModel):
 
     only: list[str] | None = None
     dry_run: bool = False
-    bootstrap_servers: str = KAFKA_BOOTSTRAP_SERVERS
     impression_topic: str = IMPRESSION_TOPIC
     click_topic: str = CLICK_TOPIC
     event_topic: str = EVENT_TOPIC
@@ -86,7 +82,6 @@ class ProduceEventsJobConfig(BaseModel):
     log_every: int = Field(default=10, ge=0)
     also_unified: bool = False
     dry_run: bool = False
-    bootstrap_servers: str = KAFKA_BOOTSTRAP_SERVERS
     impression_topic: str = IMPRESSION_TOPIC
     click_topic: str = CLICK_TOPIC
     event_topic: str = EVENT_TOPIC
@@ -100,8 +95,6 @@ class RunRealtimeCtrJobConfig(BaseModel):
     impression_topic: str = IMPRESSION_TOPIC
     click_topic: str = CLICK_TOPIC
     dead_letter_topic: str = DEAD_LETTER_TOPIC
-    bootstrap_servers: str = KAFKA_BOOTSTRAP_SERVERS
-    redis_url: str = REDIS_URL
     consumer_group: str = "ctx-ctr-flink-realtime"
     parallelism: int = Field(default=1, gt=0)
     checkpoint_interval_ms: int = Field(default=10000, ge=0)
@@ -118,8 +111,6 @@ class RunRealtimeCtrJobConfig(BaseModel):
 class RunWeightUpdateJobConfig(BaseModel):
     """Configuration for the periodic weight-update job."""
 
-    redis_url: str = REDIS_URL
-    postgres_dsn: str = POSTGRES_DSN
     interval_seconds: int = Field(default=DEFAULT_WEIGHT_UPDATE_INTERVAL_SECONDS, gt=0)
     once: bool = False
     learning_rate: float = Field(default=DEFAULT_WEIGHT_UPDATE_LEARNING_RATE, gt=0)
@@ -148,8 +139,6 @@ class RunWeightUpdateJobConfig(BaseModel):
 class PersistRedisBucketsJobConfig(BaseModel):
     """Configuration for Redis-to-Postgres bucket persistence."""
 
-    redis_url: str = REDIS_URL
-    postgres_dsn: str = POSTGRES_DSN
     dry_run: bool = False
 
     model_config = ConfigDict(frozen=True)
@@ -158,13 +147,11 @@ class PersistRedisBucketsJobConfig(BaseModel):
 class WatchRedisValuesJobConfig(BaseModel):
     """Configuration for the Redis value inspection job."""
 
-    redis_url: str = REDIS_URL
     pattern: str = "*"
     limit: int = Field(default=200, gt=0)
     watch: bool = False
     interval_seconds: float = Field(default=2.0, gt=0)
     pretty_json: bool = True
-    only_bucket: bool = False
     ad_category: str | None = None
     publisher_domain: str | None = None
     conversation_category: str | None = None

@@ -57,8 +57,6 @@ def test_persist_redis_buckets_uses_yaml_config_and_cli_overrides(
     config_path.write_text(
         "\n".join(
             [
-                "redis_url: redis://yaml:6379/0",
-                "postgres_dsn: postgresql://yaml",
                 "dry_run: false",
             ]
         ),
@@ -66,6 +64,8 @@ def test_persist_redis_buckets_uses_yaml_config_and_cli_overrides(
     )
     calls: dict[str, object] = {}
     postgres_context = FakePostgresContext(writer=object())
+    monkeypatch.setattr(persist_redis_buckets, "REDIS_URL", "redis://env:6379/0")
+    monkeypatch.setattr(persist_redis_buckets, "POSTGRES_DSN", "postgresql://env")
 
     monkeypatch.setattr(
         persist_redis_buckets,
@@ -92,8 +92,6 @@ def test_persist_redis_buckets_uses_yaml_config_and_cli_overrides(
         [
             "--config",
             str(config_path),
-            "--redis-url",
-            "redis://cli:6379/0",
             "--dry-run",
         ]
     )
@@ -101,8 +99,8 @@ def test_persist_redis_buckets_uses_yaml_config_and_cli_overrides(
     output = capsys.readouterr().out
     service = FakePersistService.created[-1]
 
-    assert calls["redis_url"] == "redis://cli:6379/0"
-    assert calls["postgres_dsn"] == "postgresql://yaml"
+    assert calls["redis_url"] == "redis://env:6379/0"
+    assert calls["postgres_dsn"] == "postgresql://env"
     assert calls["dry_run"] is True
     assert postgres_context.entered is True
     assert postgres_context.exited is True

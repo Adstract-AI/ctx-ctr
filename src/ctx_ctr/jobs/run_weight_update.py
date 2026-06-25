@@ -7,7 +7,7 @@ import time
 from collections.abc import Sequence
 from contextlib import AbstractContextManager, nullcontext
 
-from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL
+from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL, POSTGRES_DSN, REDIS_URL
 from ctx_ctr.job_config_loader import load_job_config, merge_job_config
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
@@ -45,8 +45,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         dry_run=config.dry_run,
     )
     logger.info(
-        f"Configured weight update job: redis_url={config.redis_url}, "
-        f"postgres_dsn={config.postgres_dsn}, once={config.once}, dry_run={config.dry_run}, "
+        f"Configured weight update job: once={config.once}, dry_run={config.dry_run}, "
         f"interval_seconds={config.interval_seconds}, learning_rate={config.learning_rate}, "
         f"evidence_smoothing={config.evidence_smoothing}, ridge={config.ridge}, "
         f"max_delta={config.max_delta}, "
@@ -58,21 +57,19 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
 
     try:
-        redis_store = _build_redis_store(config.redis_url)
-        with _open_postgres_writer(config.postgres_dsn, config.dry_run) as postgres_writer:
+        redis_store = _build_redis_store(REDIS_URL)
+        with _open_postgres_writer(POSTGRES_DSN, config.dry_run) as postgres_writer:
             service = WeightUpdateService(redis_store=redis_store, postgres_writer=postgres_writer)
             last_result: WeightUpdateResult | None = None
             if config.once:
                 result = service.recalibrate(run_config)
                 last_result = result
-                _log_result(result)
                 _print_result_summary(result, config_path=args.config)
                 return
 
             while True:
                 result = service.recalibrate(run_config)
                 last_result = result
-                _log_result(result)
                 _print_result_summary(
                     result,
                     config_path=args.config,
@@ -97,12 +94,6 @@ def _build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(description="Run the Task 2 weight update job.")
     parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="path to the job YAML config")
-    parser.add_argument("--redis-url", default=None, help="Redis connection URL")
-    parser.add_argument(
-        "--postgres-dsn",
-        default=None,
-        help="PostgreSQL DSN used for model snapshot history",
-    )
     parser.add_argument(
         "--interval-seconds",
         type=int,
@@ -182,8 +173,6 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
 
     overrides: dict[str, object] = {}
     for field_name in (
-        "redis_url",
-        "postgres_dsn",
         "interval_seconds",
         "once",
         "learning_rate",
@@ -286,41 +275,6 @@ def _print_result_summary(
             *(extra_lines or []),
             f"config: {config_path}",
         ],
-    )
-
-
-def _log_result(result: WeightUpdateResult) -> None:
-    """Log the required Task 2 run summary after each recalibration pass."""
-
-    logger.info(
-        f"Weight update summary: scanned={result.metrics.input_bucket_count}, "
-        f"valid={result.metrics.valid_bucket_count}, "
-        f"invalid={result.metrics.invalid_bucket_count}, "
-        f"ad_features={result.metrics.ad_feature_bucket_count}, "
-        f"domain_features={result.metrics.domain_feature_bucket_count}, "
-        f"context_features={result.metrics.context_feature_bucket_count}, "
-        f"updated_features={result.metrics.updated_feature_bucket_count}, "
-        f"skipped_features={result.metrics.skipped_feature_bucket_count}, "
-        f"insufficient_impression_features="
-        f"{result.metrics.insufficient_impression_feature_count}, "
-        f"wide_ci_features={result.metrics.wide_ci_feature_count}, "
-        f"unknown_features={result.metrics.unknown_feature_count}, "
-        f"w0_unchanged={result.metrics.w0_unchanged}, "
-        f"baseline_update={result.metrics.baseline_update_enabled}, "
-        f"baseline_applied={result.metrics.baseline_update_applied}, "
-        f"old_w0={result.metrics.old_w0:.6f}, "
-        f"new_w0={result.metrics.new_w0:.6f}, "
-        f"baseline_delta={result.metrics.baseline_delta:.6f}, "
-        f"aggregate_impressions={result.metrics.aggregate_impressions}, "
-        f"aggregate_clicks={result.metrics.aggregate_clicks}, "
-        f"baseline_ci_width={result.metrics.baseline_ci_width:.6f}, "
-        f"baseline_guard={result.metrics.baseline_guard_reason}, "
-        f"max_delta={result.metrics.max_absolute_weight_delta:.6f}, "
-        f"redis_write={result.redis_write_applied}, "
-        f"postgres_write={result.postgres_write_applied}, "
-        f"snapshot_name={result.snapshot_name or 'not_generated'}, "
-        "snapshot_id="
-        f"{result.postgres_snapshot_id if result.postgres_snapshot_id is not None else 'n/a'}"
     )
 
 

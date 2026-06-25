@@ -130,8 +130,6 @@ feature-family updates may still write Redis and PostgreSQL snapshots.
 
 - `--config <path>`: YAML config path. Defaults to
   `configs/run_weight_update.yaml`.
-- `--redis-url`: Redis connection URL
-- `--postgres-dsn`: PostgreSQL DSN for snapshot history
 - `--interval-seconds`: periodic sleep interval, default `3600`
 - `--once`: run one recalibration and exit
 - `--learning-rate`: default `0.25`
@@ -148,9 +146,11 @@ feature-family updates may still write Redis and PostgreSQL snapshots.
 
 CLI flags override values from the YAML config.
 
+Redis and PostgreSQL connections come from `REDIS_URL` and `POSTGRES_DSN` in
+the environment.
+
 ## Config Fields
 
-- `redis_url`, `postgres_dsn`: Runtime storage connections.
 - `interval_seconds`: Periodic sleep interval.
 - `once`: Run one recalibration and exit.
 - `learning_rate`, `evidence_smoothing`, `ridge`, `max_delta`,

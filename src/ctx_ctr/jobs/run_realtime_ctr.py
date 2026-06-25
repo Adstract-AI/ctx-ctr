@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from ctx_ctr.adapters.redis_ctr_state import RedisCtrStateAdapter
-from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL
+from ctx_ctr.env_variables import KAFKA_BOOTSTRAP_SERVERS, LOG_COLOR, LOG_LEVEL, REDIS_URL
 from ctx_ctr.exceptions import CtrStateError
 from ctx_ctr.job_config_loader import load_job_config, merge_job_config
 from ctx_ctr.jobs.output import print_failure, print_success
@@ -42,8 +42,6 @@ def main() -> None:
     parser.add_argument("--impression-topic", default=None)
     parser.add_argument("--click-topic", default=None)
     parser.add_argument("--dead-letter-topic", default=None)
-    parser.add_argument("--bootstrap-servers", default=None)
-    parser.add_argument("--redis-url", default=None)
     parser.add_argument("--consumer-group", default=None)
     parser.add_argument("--parallelism", type=int, default=None)
     parser.add_argument("--checkpoint-interval-ms", type=int, default=None)
@@ -231,7 +229,7 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
 
     source = (
         KafkaSource.builder()
-        .set_bootstrap_servers(config.bootstrap_servers)
+        .set_bootstrap_servers(KAFKA_BOOTSTRAP_SERVERS)
         .set_group_id(config.consumer_group)
         .set_topics(config.impression_topic, config.click_topic)
         .set_starting_offsets(KafkaOffsetsInitializer.latest())
@@ -240,7 +238,7 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
     )
     dead_letter_sink = (
         KafkaSink.builder()
-        .set_bootstrap_servers(config.bootstrap_servers)
+        .set_bootstrap_servers(KAFKA_BOOTSTRAP_SERVERS)
         .set_record_serializer(
             KafkaRecordSerializationSchema.builder()
             .set_topic(config.dead_letter_topic)
@@ -257,7 +255,7 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
     )
     events = env.from_source(source, WatermarkStrategy.no_watermarks(), "ctr-events")
     dead_letters = events.key_by(_raw_event_bucket_key, key_type=Types.STRING()).process(
-        RedisCtrProcessFunction(config.redis_url, config.log_every),
+        RedisCtrProcessFunction(REDIS_URL, config.log_every),
         output_type=Types.STRING(),
     )
     dead_letters.sink_to(dead_letter_sink).name("dead-letter-sink")
@@ -273,8 +271,6 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
         "impression_topic",
         "click_topic",
         "dead_letter_topic",
-        "bootstrap_servers",
-        "redis_url",
         "consumer_group",
         "parallelism",
         "checkpoint_interval_ms",

@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 
 from ctx_ctr.adapters.kafka_admin import KafkaTopicAdminAdapter
-from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL
+from ctx_ctr.env_variables import KAFKA_BOOTSTRAP_SERVERS, LOG_COLOR, LOG_LEVEL
 from ctx_ctr.job_config_loader import load_job_config, merge_job_config
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
@@ -31,7 +31,6 @@ def main() -> None:
         default=None,
         help="print selected topics without writing",
     )
-    parser.add_argument("--bootstrap-servers", default=None, help="Kafka bootstrap servers")
     parser.add_argument("--impression-topic", default=None, help="default impression topic")
     parser.add_argument("--click-topic", default=None, help="default click topic")
     parser.add_argument("--event-topic", default=None, help="default unified event topic")
@@ -59,7 +58,7 @@ def main() -> None:
     try:
         logger.info("Starting Kafka topic cleanup")
         adapter = KafkaTopicAdminAdapter(
-            bootstrap_servers=config.bootstrap_servers,
+            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
             topic_names=topic_names,
         )
         adapter.clean_topics()
@@ -80,7 +79,6 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
     for field_name in (
         "only",
         "dry_run",
-        "bootstrap_servers",
         "impression_topic",
         "click_topic",
         "event_topic",

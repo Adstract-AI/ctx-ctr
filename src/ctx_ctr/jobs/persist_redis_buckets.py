@@ -6,7 +6,7 @@ import argparse
 from collections.abc import Sequence
 from contextlib import AbstractContextManager, nullcontext
 
-from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL
+from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL, POSTGRES_DSN, REDIS_URL
 from ctx_ctr.job_config_loader import load_job_config, merge_job_config
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
@@ -27,8 +27,6 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     parser = argparse.ArgumentParser(description="Persist Redis CTR bucket state into PostgreSQL.")
     parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="path to the job YAML config")
-    parser.add_argument("--redis-url", default=None, help="Redis connection URL")
-    parser.add_argument("--postgres-dsn", default=None, help="PostgreSQL DSN")
     parser.add_argument(
         "--dry-run",
         action=argparse.BooleanOptionalAction,
@@ -42,13 +40,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     configure_logging(LOG_LEVEL, LOG_COLOR)
     logger.info(
         "Configured Redis bucket persistence job: "
-        f"redis_url={config.redis_url}, postgres_dsn={config.postgres_dsn}, "
         f"dry_run={config.dry_run}, config={args.config}"
     )
 
     try:
-        redis_source = _build_redis_source(config.redis_url)
-        with _open_postgres_writer(config.postgres_dsn, config.dry_run) as postgres_writer:
+        redis_source = _build_redis_source(REDIS_URL)
+        with _open_postgres_writer(POSTGRES_DSN, config.dry_run) as postgres_writer:
             service = PersistRedisBucketsService(
                 redis_source=redis_source,
                 postgres_writer=postgres_writer,
@@ -65,7 +62,7 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
     """Return CLI values explicitly overriding the YAML config."""
 
     overrides: dict[str, object] = {}
-    for field_name in ("redis_url", "postgres_dsn", "dry_run"):
+    for field_name in ("dry_run",):
         value = getattr(args, field_name)
         if value is not None:
             overrides[field_name] = value

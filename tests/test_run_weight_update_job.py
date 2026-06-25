@@ -57,8 +57,6 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
     config_path.write_text(
         "\n".join(
             [
-                "redis_url: redis://yaml:6379/0",
-                "postgres_dsn: postgresql://yaml",
                 "interval_seconds: 99",
                 "once: false",
                 "learning_rate: 0.11",
@@ -77,6 +75,8 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
     )
     calls: dict[str, object] = {}
     postgres_context = FakePostgresContext(writer=object())
+    monkeypatch.setattr(run_weight_update, "REDIS_URL", "redis://env:6379/0")
+    monkeypatch.setattr(run_weight_update, "POSTGRES_DSN", "postgresql://env")
 
     monkeypatch.setattr(
         run_weight_update,
@@ -106,8 +106,6 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
             "--no-baseline-update",
             "--baseline-max-ci-width",
             "0.07",
-            "--redis-url",
-            "redis://cli:6379/0",
         ]
     )
 
@@ -115,8 +113,8 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
     service = FakeWeightUpdateService.created[-1]
     run_config = service.run_configs[-1]
 
-    assert calls["redis_url"] == "redis://cli:6379/0"
-    assert calls["postgres_dsn"] == "postgresql://yaml"
+    assert calls["redis_url"] == "redis://env:6379/0"
+    assert calls["postgres_dsn"] == "postgresql://env"
     assert calls["dry_run"] is True
     assert postgres_context.entered is True
     assert postgres_context.exited is True
@@ -145,8 +143,6 @@ def test_run_weight_update_disabled_once_enters_periodic_loop_until_keyboard_int
     config_path.write_text(
         "\n".join(
             [
-                "redis_url: redis://yaml:6379/0",
-                "postgres_dsn: postgresql://yaml",
                 "interval_seconds: 1",
                 "once: false",
                 "learning_rate: 0.25",

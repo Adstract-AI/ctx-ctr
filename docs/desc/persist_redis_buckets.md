@@ -47,8 +47,6 @@ persistence.
 
 - `--config <path>`: YAML config path. Defaults to
   `configs/persist_redis_buckets.yaml`.
-- `--redis-url <url>`: Redis URL. Defaults to the runtime setting.
-- `--postgres-dsn <dsn>`: PostgreSQL DSN. Defaults to the runtime setting.
 - `--dry-run` / `--no-dry-run`: Scan and validate Redis buckets without writing
   PostgreSQL.
 
@@ -56,9 +54,10 @@ CLI flags override values from the YAML config.
 
 ## Config Fields
 
-- `redis_url`: Redis URL.
-- `postgres_dsn`: PostgreSQL DSN.
 - `dry_run`: Whether to scan only and skip PostgreSQL writes.
+
+Redis and PostgreSQL connections come from `REDIS_URL` and `POSTGRES_DSN` in
+the environment.
 
 ## Redis Input
 

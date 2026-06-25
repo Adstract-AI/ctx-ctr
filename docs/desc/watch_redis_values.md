@@ -43,7 +43,6 @@ seed-values
 
 - `--config <path>`: YAML config path. Defaults to
   `configs/watch_redis_values.yaml`.
-- `--redis-url <url>`: Redis URL. Defaults to the config value.
 - `--pattern <pattern>`: Redis scan pattern. Defaults to `*`.
 - `--limit <int>`: Maximum number of matching keys to print. Defaults to `200`.
 - `--watch` / `--no-watch`: Keep printing snapshots until interrupted.
@@ -51,23 +50,22 @@ seed-values
   to `2.0`.
 - `--pretty-json` / `--no-pretty-json`: Pretty-print JSON values. Enabled by
   default.
-- `--only-bucket` / `--no-only-bucket`: Print only the focused bucket.
-- `--bucket <ad_category> <publisher_domain> <conversation_category>`: Print one
-  focused CTR bucket separately.
+- `--bucket <ad_category> <publisher_domain> <conversation_category>`: Print
+  only one focused CTR bucket.
 
 CLI flags override values from the YAML config.
 
 ## Config Fields
 
-- `redis_url`: Redis URL.
 - `pattern`: Redis key scan pattern.
 - `limit`: Maximum number of scanned keys to print.
 - `watch`: Whether to keep printing snapshots.
 - `interval_seconds`: Watch-mode delay.
 - `pretty_json`: Whether JSON values should be indented.
-- `only_bucket`: Whether to skip the key scan and print only the focused bucket.
 - `ad_category`, `publisher_domain`, `conversation_category`: Optional focused
-  bucket fields.
+  bucket fields. When all three are set, only that bucket is printed.
+
+Redis comes from `REDIS_URL` in the environment.
 
 ## Examples
 
@@ -93,13 +91,12 @@ Watch one bucket while events are being produced:
 
 ```bash
 watch-redis-values \
-  --only-bucket \
   --watch \
   --interval-seconds 1 \
   --bucket finance news.example personal_finance
 ```
 
-Print all keys and also highlight one bucket:
+Print one bucket once:
 
 ```bash
 watch-redis-values --bucket finance news.example personal_finance

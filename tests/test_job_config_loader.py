@@ -27,7 +27,6 @@ def test_load_job_config_validates_yaml_into_pydantic_model(tmp_path: Path) -> N
                 "log_every: 5",
                 "also_unified: true",
                 "dry_run: true",
-                "bootstrap_servers: localhost:9092",
                 "impression_topic: ctr.impressions",
                 "click_topic: ctr.clicks",
                 "event_topic: ctr.events",

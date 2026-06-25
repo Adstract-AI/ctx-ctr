@@ -60,9 +60,6 @@ python -m ctx_ctr.jobs.seed_values
 - `--click-topic <topic>`: Click input topic. Defaults to `ctr.clicks`.
 - `--dead-letter-topic <topic>`: Output topic for rejected records. Defaults to
   `ctr.dead-letter`.
-- `--bootstrap-servers <host:port>`: Kafka bootstrap servers. Defaults to the
-  runtime setting.
-- `--redis-url <url>`: Redis URL. Defaults to the runtime setting.
 - `--consumer-group <name>`: Kafka consumer group. Defaults to
   `ctx-ctr-flink-realtime`.
 - `--parallelism <int>`: PyFlink parallelism. Defaults to `1`.
@@ -85,8 +82,6 @@ CLI flags override values from the YAML config.
 ## Config Fields
 
 - `impression_topic`, `click_topic`, `dead_letter_topic`: Kafka topics.
-- `bootstrap_servers`: Kafka bootstrap servers.
-- `redis_url`: Redis URL.
 - `consumer_group`: Kafka consumer group.
 - `parallelism`: PyFlink parallelism.
 - `checkpoint_interval_ms`: Flink checkpoint interval. Use `0` to disable.
@@ -100,6 +95,9 @@ CLI flags override values from the YAML config.
   `trusted`.
 - `trust_max_ci_width`: Maximum bucket confidence-interval width allowed for
   `trusted`.
+
+Kafka bootstrap servers come from `KAFKA_BOOTSTRAP_SERVERS` in the environment.
+Redis comes from `REDIS_URL` in the environment.
 
 ## Kafka Input
 
