@@ -175,21 +175,21 @@ class WeightUpdateService:
             current_weights=current_model.weights.w_ad,
             buckets=feature_buckets[0],
             w0=current_model.w0,
-            prior_strength=current_model.metrics.prior_strength,
+            prior_strength=current_model.metrics.family_prior_strengths["ad"],
             config=config,
         )
         domain_result = self._update_feature_family(
             current_weights=current_model.weights.w_dom,
             buckets=feature_buckets[1],
             w0=current_model.w0,
-            prior_strength=current_model.metrics.prior_strength,
+            prior_strength=current_model.metrics.family_prior_strengths["domain"],
             config=config,
         )
         context_result = self._update_feature_family(
             current_weights=current_model.weights.w_ctx,
             buckets=feature_buckets[2],
             w0=current_model.w0,
-            prior_strength=current_model.metrics.prior_strength,
+            prior_strength=current_model.metrics.family_prior_strengths["context"],
             config=config,
         )
         feature_metrics = (ad_result, domain_result, context_result)
@@ -226,6 +226,8 @@ class WeightUpdateService:
                 else current_model.metrics.baseline_ctr
             ),
             prior_strength=current_model.metrics.prior_strength,
+            global_prior_strength=current_model.metrics.global_prior_strength,
+            family_prior_strengths=current_model.metrics.family_prior_strengths,
         )
         updated_snapshot = SeedModelSnapshot(
             snapshot_name=snapshot_name,
@@ -310,7 +312,7 @@ class WeightUpdateService:
 
         old_w0 = current_model.w0
         old_baseline_ctr = sigmoid(old_w0)
-        prior_strength = current_model.metrics.prior_strength
+        prior_strength = current_model.metrics.global_prior_strength
         alpha_prior = old_baseline_ctr * prior_strength
         beta_prior = (1.0 - old_baseline_ctr) * prior_strength
         alpha_posterior = alpha_prior + aggregate_clicks

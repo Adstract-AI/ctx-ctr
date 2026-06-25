@@ -54,7 +54,12 @@ def test_seed_dataset_rejects_duplicate_buckets() -> None:
         snapshot_name="seed_values_v1",
         w0=-3.89,
         weights=SeedWeights(w_ad={"finance": 0.0}, w_dom={"news.example": 0.0}, w_ctx={"ctx": 0.0}),
-        metrics=SeedModelMetrics(baseline_ctr=0.02, prior_strength=100.0),
+        metrics=SeedModelMetrics(
+            baseline_ctr=0.02,
+            global_prior_strength=500.0,
+            prior_strength=100.0,
+            family_prior_strengths={"ad": 200.0, "domain": 200.0, "context": 150.0},
+        ),
     )
     summary = SeedRunSummary(
         summary_name="seed_values_baseline",

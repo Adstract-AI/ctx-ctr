@@ -20,6 +20,12 @@ class SeedValuesJobConfig(BaseModel):
     """Configuration for the seed-values job."""
 
     dry_run: bool = False
+    baseline_prior_mean: float = Field(default=0.02, gt=0, lt=1)
+    triplet_prior_strength: float = Field(default=100.0, gt=0)
+    global_prior_strength: float = Field(default=500.0, gt=0)
+    ad_prior_strength: float = Field(default=200.0, gt=0)
+    domain_prior_strength: float = Field(default=200.0, gt=0)
+    context_prior_strength: float = Field(default=150.0, gt=0)
 
     model_config = ConfigDict(frozen=True)
 

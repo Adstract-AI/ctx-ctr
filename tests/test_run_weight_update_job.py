@@ -216,7 +216,12 @@ def build_result(config: WeightUpdateRunConfig) -> WeightUpdateResult:
             w_dom={"news.example": 0.0},
             w_ctx={"personal_finance": 0.0},
         ),
-        metrics=SeedModelMetrics(baseline_ctr=0.02, prior_strength=100.0),
+        metrics=SeedModelMetrics(
+            baseline_ctr=0.02,
+            global_prior_strength=500.0,
+            prior_strength=100.0,
+            family_prior_strengths={"ad": 200.0, "domain": 200.0, "context": 150.0},
+        ),
     )
     return WeightUpdateResult(
         accepted=True,

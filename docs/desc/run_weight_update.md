@@ -70,7 +70,8 @@ The accepted Redis model payload includes:
 - updated `w0`
 - updated `w_ad`, `w_dom`, and `w_ctx`
 - updated `metrics.baseline_ctr`
-- `metrics.prior_strength` unchanged
+- prior strengths from model metrics unchanged:
+  `prior_strength`, `global_prior_strength`, and `family_prior_strengths`
 
 ## PostgreSQL Output
 
@@ -92,6 +93,8 @@ Feature-weight learning:
 - ignore the triplet `trusted` flag for weight learning
 - for each single-feature bucket, build a Beta prior from
   `sigmoid(w0 + w_family[k])`
+- use the matching family-specific prior strength from
+  `weights:current.metrics.family_prior_strengths`
 - combine the prior with aggregated impressions/clicks to compute posterior CTR
 - compute `z_target = logit(posterior_ctr)` and `delta_star = z_target - w0`
 - update only buckets that pass `min_feature_impressions` and
@@ -105,6 +108,7 @@ Baseline learning:
 - use all valid buckets where `impressions > 0` and `clicks <= impressions`
 - aggregate global impressions and clicks
 - combine the aggregate evidence with the current baseline prior
+- use `weights:current.metrics.global_prior_strength` for the baseline prior
 - direct-recompute `w0 = logit(posterior_global_ctr)` when the 90% confidence
   interval width guard passes
 - skip the whole model write when baseline update is enabled but guards fail

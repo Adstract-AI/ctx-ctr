@@ -26,6 +26,10 @@ CONVERSATION_CATEGORIES = [
 
 BASELINE_CTR = 0.02
 PRIOR_STRENGTH = 100.0
+GLOBAL_PRIOR_STRENGTH = 500.0
+AD_PRIOR_STRENGTH = 200.0
+DOMAIN_PRIOR_STRENGTH = 200.0
+CONTEXT_PRIOR_STRENGTH = 150.0
 Z_SCORE_95 = 1.96
 TRUSTED_MIN_IMPRESSIONS = 100
 TRUSTED_MAX_VARIANCE = 0.0005
@@ -54,21 +58,43 @@ CONTEXT_WEIGHTS = {
 }
 
 
-def build_seed_values_dataset() -> SeedDataset:
+def build_seed_values_dataset(
+    *,
+    baseline_prior_mean: float = BASELINE_CTR,
+    triplet_prior_strength: float = PRIOR_STRENGTH,
+    global_prior_strength: float = GLOBAL_PRIOR_STRENGTH,
+    ad_prior_strength: float = AD_PRIOR_STRENGTH,
+    domain_prior_strength: float = DOMAIN_PRIOR_STRENGTH,
+    context_prior_strength: float = CONTEXT_PRIOR_STRENGTH,
+) -> SeedDataset:
     """Build the deterministic seed-values dataset."""
 
-    w0 = logit(BASELINE_CTR)
+    w0 = logit(baseline_prior_mean)
     snapshot = SeedModelSnapshot(
         snapshot_name="seed_values_v1",
         w0=w0,
         weights=SeedWeights(w_ad=AD_WEIGHTS, w_dom=DOMAIN_WEIGHTS, w_ctx=CONTEXT_WEIGHTS),
         metrics=SeedModelMetrics(
-            baseline_ctr=BASELINE_CTR,
-            prior_strength=PRIOR_STRENGTH,
+            baseline_ctr=baseline_prior_mean,
+            global_prior_strength=global_prior_strength,
+            prior_strength=triplet_prior_strength,
+            family_prior_strengths={
+                "ad": ad_prior_strength,
+                "domain": domain_prior_strength,
+                "context": context_prior_strength,
+            },
         ),
     )
-    buckets = _build_bucket_statistics(w0)
-    run_summary = _build_seed_run_summary(buckets)
+    buckets = _build_bucket_statistics(w0, triplet_prior_strength)
+    run_summary = _build_seed_run_summary(
+        buckets=buckets,
+        baseline_prior_mean=baseline_prior_mean,
+        triplet_prior_strength=triplet_prior_strength,
+        global_prior_strength=global_prior_strength,
+        ad_prior_strength=ad_prior_strength,
+        domain_prior_strength=domain_prior_strength,
+        context_prior_strength=context_prior_strength,
+    )
     return SeedDataset(
         generated_at=SEED_GENERATED_AT,
         bucket_statistics=buckets,
@@ -77,7 +103,7 @@ def build_seed_values_dataset() -> SeedDataset:
     )
 
 
-def _build_bucket_statistics(w0: float) -> list[SeedBucketStatistic]:
+def _build_bucket_statistics(w0: float, triplet_prior_strength: float) -> list[SeedBucketStatistic]:
     buckets: list[SeedBucketStatistic] = []
     for ad_index, ad_category in enumerate(AD_CATEGORIES):
         for domain_index, publisher_domain in enumerate(PUBLISHER_DOMAINS):
@@ -107,6 +133,7 @@ def _build_bucket_statistics(w0: float) -> list[SeedBucketStatistic]:
                         impressions=impression_seed,
                         clicks=clicks,
                         prior_mean=prior_mean,
+                        prior_strength=triplet_prior_strength,
                     )
                 )
     return buckets
@@ -120,9 +147,10 @@ def _build_bucket_statistic(
     impressions: int,
     clicks: int,
     prior_mean: float,
+    prior_strength: float,
 ) -> SeedBucketStatistic:
-    alpha_prior = prior_mean * PRIOR_STRENGTH
-    beta_prior = (1.0 - prior_mean) * PRIOR_STRENGTH
+    alpha_prior = prior_mean * prior_strength
+    beta_prior = (1.0 - prior_mean) * prior_strength
     alpha_posterior = alpha_prior + clicks
     beta_posterior = beta_prior + impressions - clicks
     ctr = alpha_posterior / (alpha_posterior + beta_posterior)
@@ -151,7 +179,16 @@ def _build_bucket_statistic(
     )
 
 
-def _build_seed_run_summary(buckets: list[SeedBucketStatistic]) -> SeedRunSummary:
+def _build_seed_run_summary(
+    *,
+    buckets: list[SeedBucketStatistic],
+    baseline_prior_mean: float,
+    triplet_prior_strength: float,
+    global_prior_strength: float,
+    ad_prior_strength: float,
+    domain_prior_strength: float,
+    context_prior_strength: float,
+) -> SeedRunSummary:
     impressions = sum(bucket.impressions for bucket in buckets)
     clicks = sum(bucket.clicks for bucket in buckets)
     trusted = sum(1 for bucket in buckets if bucket.trusted)
@@ -161,8 +198,12 @@ def _build_seed_run_summary(buckets: list[SeedBucketStatistic]) -> SeedRunSummar
             "ad_categories": AD_CATEGORIES,
             "publisher_domains": PUBLISHER_DOMAINS,
             "conversation_categories": CONVERSATION_CATEGORIES,
-            "prior_strength": PRIOR_STRENGTH,
-            "baseline_ctr": BASELINE_CTR,
+            "baseline_prior_mean": baseline_prior_mean,
+            "triplet_prior_strength": triplet_prior_strength,
+            "global_prior_strength": global_prior_strength,
+            "ad_prior_strength": ad_prior_strength,
+            "domain_prior_strength": domain_prior_strength,
+            "context_prior_strength": context_prior_strength,
         },
         metrics={
             "bucket_count": len(buckets),

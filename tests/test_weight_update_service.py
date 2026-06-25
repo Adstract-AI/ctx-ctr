@@ -146,9 +146,10 @@ def test_single_feature_update_math_matches_document_formula() -> None:
 
     old_weight = snapshot.weights.w_ad["finance"]
     prior_mean = sigmoid(snapshot.w0 + old_weight)
-    alpha_posterior = prior_mean * snapshot.metrics.prior_strength + bucket.clicks
+    prior_strength = snapshot.metrics.family_prior_strengths["ad"]
+    alpha_posterior = prior_mean * prior_strength + bucket.clicks
     beta_posterior = (
-        (1.0 - prior_mean) * snapshot.metrics.prior_strength
+        (1.0 - prior_mean) * prior_strength
         + bucket.impressions
         - bucket.clicks
     )
@@ -265,8 +266,8 @@ def test_baseline_update_can_change_w0_and_baseline_ctr() -> None:
     bucket = build_bucket(impressions=1000, clicks=80)
 
     result = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True)
-    alpha_prior = sigmoid(snapshot.w0) * snapshot.metrics.prior_strength
-    beta_prior = (1.0 - sigmoid(snapshot.w0)) * snapshot.metrics.prior_strength
+    alpha_prior = sigmoid(snapshot.w0) * snapshot.metrics.global_prior_strength
+    beta_prior = (1.0 - sigmoid(snapshot.w0)) * snapshot.metrics.global_prior_strength
     posterior_ctr = (alpha_prior + bucket.clicks) / (
         alpha_prior + beta_prior + bucket.impressions
     )
@@ -354,9 +355,10 @@ def test_single_feature_ci_uses_document_90_percent_z_score() -> None:
     result = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True, baseline_update=False)
 
     prior_mean = sigmoid(snapshot.w0 + snapshot.weights.w_ad["finance"])
-    alpha_posterior = prior_mean * snapshot.metrics.prior_strength + bucket.clicks
+    prior_strength = snapshot.metrics.family_prior_strengths["ad"]
+    alpha_posterior = prior_mean * prior_strength + bucket.clicks
     beta_posterior = (
-        (1.0 - prior_mean) * snapshot.metrics.prior_strength
+        (1.0 - prior_mean) * prior_strength
         + bucket.impressions
         - bucket.clicks
     )
@@ -380,7 +382,12 @@ def build_snapshot() -> SeedModelSnapshot:
             w_dom={"news.example": 0.05, "tech.example": -0.05},
             w_ctx={"personal_finance": 0.08, "gaming": -0.08},
         ),
-        metrics=SeedModelMetrics(baseline_ctr=0.02, prior_strength=100.0),
+        metrics=SeedModelMetrics(
+            baseline_ctr=0.02,
+            global_prior_strength=500.0,
+            prior_strength=100.0,
+            family_prior_strengths={"ad": 200.0, "domain": 200.0, "context": 150.0},
+        ),
     )
 
 

@@ -77,7 +77,12 @@ def build_model() -> CtrModelSnapshot:
             w_dom={"news.example": 0.05},
             w_ctx={"personal_finance": 0.16},
         ),
-        metrics=CtrModelMetrics(baseline_ctr=0.02, prior_strength=100.0),
+        metrics=CtrModelMetrics(
+            baseline_ctr=0.02,
+            global_prior_strength=500.0,
+            prior_strength=100.0,
+            family_prior_strengths={"ad": 200.0, "domain": 200.0, "context": 150.0},
+        ),
     )
 
 
