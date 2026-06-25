@@ -15,7 +15,12 @@ from ctx_ctr.models.weight_update import (
     WeightUpdateResult,
     WeightUpdateRunConfig,
 )
-from ctx_ctr.services.ctr_math import beta_variance, clipped_confidence_interval, safe_logit, sigmoid
+from ctx_ctr.services.ctr_math import (
+    beta_variance,
+    clipped_confidence_interval,
+    safe_logit,
+    sigmoid,
+)
 from ctx_ctr.services.weight_update_service import FEATURE_UPDATE_Z_SCORE, WeightUpdateService
 
 
@@ -260,8 +265,14 @@ def test_baseline_update_can_change_w0_and_baseline_ctr() -> None:
     bucket = build_bucket(impressions=1000, clicks=80)
 
     result = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True)
+    alpha_prior = sigmoid(snapshot.w0) * snapshot.metrics.prior_strength
+    beta_prior = (1.0 - sigmoid(snapshot.w0)) * snapshot.metrics.prior_strength
+    posterior_ctr = (alpha_prior + bucket.clicks) / (
+        alpha_prior + beta_prior + bucket.impressions
+    )
 
     assert result.model_snapshot.w0 != snapshot.w0
+    assert result.model_snapshot.w0 == pytest.approx(safe_logit(posterior_ctr))
     assert result.metrics.w0_unchanged is False
     assert result.metrics.baseline_update_enabled is True
     assert result.metrics.baseline_update_applied is True
@@ -273,12 +284,12 @@ def test_baseline_update_can_change_w0_and_baseline_ctr() -> None:
     assert result.metrics.aggregate_clicks == 80
 
 
-def test_baseline_guard_failure_skips_whole_model_write() -> None:
+def test_baseline_ci_guard_failure_skips_whole_model_write() -> None:
     snapshot = build_snapshot()
-    bucket = build_bucket(impressions=200, clicks=28)
+    bucket = build_bucket(impressions=1000, clicks=80)
     redis = FakeRedisStore(snapshot, [bucket])
     postgres = FakePostgresWriter()
-    config = build_config(dry_run=False, baseline_min_impressions=1000)
+    config = build_config(dry_run=False, baseline_max_ci_width=0.0001)
 
     result = WeightUpdateService(redis_store=redis, postgres_writer=postgres).recalibrate(config)
 
@@ -288,7 +299,7 @@ def test_baseline_guard_failure_skips_whole_model_write() -> None:
     assert result.postgres_write_applied is False
     assert redis.written_snapshot is None
     assert postgres.inserted == []
-    assert result.skipped_reason == "baseline_guard_failed:insufficient_baseline_impressions"
+    assert result.skipped_reason == "baseline_guard_failed:baseline_ci_width_too_wide"
 
 
 def test_weight_families_remain_centered_after_updates() -> None:
@@ -413,8 +424,7 @@ def build_config(
     min_feature_impressions: int = 500,
     max_feature_ci_width: float = 1.0,
     baseline_update: bool = True,
-    baseline_max_delta: float = 0.10,
-    baseline_min_impressions: int = 1,
+    baseline_max_ci_width: float = 1.0,
 ) -> WeightUpdateRunConfig:
     return WeightUpdateRunConfig(
         learning_rate=0.25,
@@ -425,11 +435,7 @@ def build_config(
         max_feature_ci_width=max_feature_ci_width,
         snapshot_name_prefix="flink_weight_update",
         baseline_update=baseline_update,
-        baseline_learning_rate=0.10,
-        baseline_evidence_smoothing=5000.0,
-        baseline_max_delta=baseline_max_delta,
-        baseline_min_impressions=baseline_min_impressions,
-        baseline_max_ci_width=1.0,
+        baseline_max_ci_width=baseline_max_ci_width,
         dry_run=dry_run,
     )
 
@@ -444,7 +450,7 @@ def run_service(
     min_feature_impressions: int = 500,
     max_feature_ci_width: float = 1.0,
     baseline_update: bool = True,
-    baseline_max_delta: float = 0.10,
+    baseline_max_ci_width: float = 1.0,
 ) -> WeightUpdateResult:
     redis = FakeRedisStore(snapshot, buckets)
     postgres = FakePostgresWriter()
@@ -455,6 +461,6 @@ def run_service(
         min_feature_impressions=min_feature_impressions,
         max_feature_ci_width=max_feature_ci_width,
         baseline_update=baseline_update,
-        baseline_max_delta=baseline_max_delta,
+        baseline_max_ci_width=baseline_max_ci_width,
     )
     return WeightUpdateService(redis_store=redis, postgres_writer=postgres).recalibrate(config)

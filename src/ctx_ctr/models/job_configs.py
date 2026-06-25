@@ -106,11 +106,7 @@ class RunWeightUpdateJobConfig(BaseModel):
     max_feature_ci_width: float = Field(default=0.02, gt=0)
     snapshot_name_prefix: str = Field(default="flink_weight_update", min_length=1)
     baseline_update: bool = True
-    baseline_learning_rate: float = Field(default=0.10, gt=0)
-    baseline_evidence_smoothing: float = Field(default=5000.0, ge=0)
-    baseline_max_delta: float = Field(default=0.10, gt=0)
-    baseline_min_impressions: int = Field(default=1000, ge=1)
-    baseline_max_ci_width: float = Field(default=0.02, gt=0)
+    baseline_max_ci_width: float = Field(default=0.005, gt=0)
     dry_run: bool = False
 
     model_config = ConfigDict(frozen=True)

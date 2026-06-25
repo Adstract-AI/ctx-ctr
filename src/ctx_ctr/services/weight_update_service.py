@@ -30,6 +30,7 @@ from ctx_ctr.services.ctr_math import (
 
 logger = get_logger(__name__)
 FEATURE_UPDATE_Z_SCORE = 1.645
+BASELINE_UPDATE_Z_SCORE = 1.645
 
 
 class WeightUpdateRedisStore(Protocol):
@@ -316,7 +317,11 @@ class WeightUpdateService:
         beta_posterior = beta_prior + aggregate_impressions - aggregate_clicks
         posterior_baseline_ctr = alpha_posterior / (alpha_posterior + beta_posterior)
         variance = beta_variance(alpha_posterior, beta_posterior)
-        ci_low, ci_high = clipped_confidence_interval(posterior_baseline_ctr, variance, 1.96)
+        ci_low, ci_high = clipped_confidence_interval(
+            posterior_baseline_ctr,
+            variance,
+            BASELINE_UPDATE_Z_SCORE,
+        )
         ci_width = ci_high - ci_low
 
         if not config.baseline_update:
@@ -334,25 +339,6 @@ class WeightUpdateService:
                 ci_high=ci_high,
                 ci_width=ci_width,
                 guard_reason="baseline_update_disabled",
-                valid_bucket_count=len(valid_buckets),
-                invalid_bucket_count=scan_invalid_bucket_count + parsed_invalid_bucket_count,
-            )
-
-        if aggregate_impressions < config.baseline_min_impressions:
-            return BaselineUpdateProposal(
-                old_w0=old_w0,
-                new_w0=old_w0,
-                baseline_delta=0.0,
-                update_enabled=True,
-                update_applied=False,
-                aggregate_impressions=aggregate_impressions,
-                aggregate_clicks=aggregate_clicks,
-                aggregate_observed_ctr=aggregate_observed_ctr,
-                posterior_baseline_ctr=posterior_baseline_ctr,
-                ci_low=ci_low,
-                ci_high=ci_high,
-                ci_width=ci_width,
-                guard_reason="insufficient_baseline_impressions",
                 valid_bucket_count=len(valid_buckets),
                 invalid_bucket_count=scan_invalid_bucket_count + parsed_invalid_bucket_count,
             )
@@ -376,19 +362,8 @@ class WeightUpdateService:
                 invalid_bucket_count=scan_invalid_bucket_count + parsed_invalid_bucket_count,
             )
 
-        target_w0 = safe_logit(posterior_baseline_ctr)
-        eta = (
-            config.baseline_learning_rate
-            * aggregate_impressions
-            / (aggregate_impressions + config.baseline_evidence_smoothing)
-        )
-        raw_delta = eta * (target_w0 - old_w0)
-        delta = clip_value(
-            raw_delta,
-            -config.baseline_max_delta,
-            config.baseline_max_delta,
-        )
-        new_w0 = old_w0 + delta
+        new_w0 = safe_logit(posterior_baseline_ctr)
+        delta = new_w0 - old_w0
         return BaselineUpdateProposal(
             old_w0=old_w0,
             new_w0=new_w0,

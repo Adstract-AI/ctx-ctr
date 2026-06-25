@@ -41,10 +41,6 @@ def main(argv: Sequence[str] | None = None) -> None:
         max_feature_ci_width=config.max_feature_ci_width,
         snapshot_name_prefix=config.snapshot_name_prefix,
         baseline_update=config.baseline_update,
-        baseline_learning_rate=config.baseline_learning_rate,
-        baseline_evidence_smoothing=config.baseline_evidence_smoothing,
-        baseline_max_delta=config.baseline_max_delta,
-        baseline_min_impressions=config.baseline_min_impressions,
         baseline_max_ci_width=config.baseline_max_ci_width,
         dry_run=config.dry_run,
     )
@@ -57,10 +53,6 @@ def main(argv: Sequence[str] | None = None) -> None:
         f"min_feature_impressions={config.min_feature_impressions}, "
         f"max_feature_ci_width={config.max_feature_ci_width}, "
         f"baseline_update={config.baseline_update}, "
-        f"baseline_learning_rate={config.baseline_learning_rate}, "
-        f"baseline_evidence_smoothing={config.baseline_evidence_smoothing}, "
-        f"baseline_max_delta={config.baseline_max_delta}, "
-        f"baseline_min_impressions={config.baseline_min_impressions}, "
         f"baseline_max_ci_width={config.baseline_max_ci_width}, "
         f"snapshot_name_prefix={config.snapshot_name_prefix}, config={args.config}"
     )
@@ -171,34 +163,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="enable or disable global baseline w0 updates",
     )
     parser.add_argument(
-        "--baseline-learning-rate",
-        type=float,
-        default=None,
-        help="base learning rate for global baseline updates",
-    )
-    parser.add_argument(
-        "--baseline-evidence-smoothing",
-        type=float,
-        default=None,
-        help="evidence smoothing term for the baseline learning rate",
-    )
-    parser.add_argument(
-        "--baseline-max-delta",
-        type=float,
-        default=None,
-        help="maximum absolute global baseline update",
-    )
-    parser.add_argument(
-        "--baseline-min-impressions",
-        type=int,
-        default=None,
-        help="minimum global impressions required before updating the baseline",
-    )
-    parser.add_argument(
         "--baseline-max-ci-width",
         type=float,
         default=None,
-        help="maximum posterior confidence interval width allowed for baseline updates",
+        help="maximum 90 percent posterior confidence interval width for baseline updates",
     )
     parser.add_argument(
         "--dry-run",
@@ -226,10 +194,6 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
         "max_feature_ci_width",
         "snapshot_name_prefix",
         "baseline_update",
-        "baseline_learning_rate",
-        "baseline_evidence_smoothing",
-        "baseline_max_delta",
-        "baseline_min_impressions",
         "baseline_max_ci_width",
         "dry_run",
     ):

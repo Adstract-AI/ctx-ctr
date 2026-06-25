@@ -69,10 +69,6 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
                 "max_feature_ci_width: 0.03",
                 "snapshot_name_prefix: yaml_prefix",
                 "baseline_update: true",
-                "baseline_learning_rate: 0.12",
-                "baseline_evidence_smoothing: 333.0",
-                "baseline_max_delta: 0.05",
-                "baseline_min_impressions: 444",
                 "baseline_max_ci_width: 0.06",
                 "dry_run: false",
             ]
@@ -108,7 +104,7 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
             "--learning-rate",
             "0.25",
             "--no-baseline-update",
-            "--baseline-max-delta",
+            "--baseline-max-ci-width",
             "0.07",
             "--redis-url",
             "redis://cli:6379/0",
@@ -132,11 +128,7 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
     assert run_config.max_feature_ci_width == 0.03
     assert run_config.snapshot_name_prefix == "yaml_prefix"
     assert run_config.baseline_update is False
-    assert run_config.baseline_learning_rate == 0.12
-    assert run_config.baseline_evidence_smoothing == 333.0
-    assert run_config.baseline_max_delta == 0.07
-    assert run_config.baseline_min_impressions == 444
-    assert run_config.baseline_max_ci_width == 0.06
+    assert run_config.baseline_max_ci_width == 0.07
     assert run_config.dry_run is True
     assert "Weight update dry-run" in output
     assert "Baseline Update Enabled" in output
@@ -165,10 +157,6 @@ def test_run_weight_update_disabled_once_enters_periodic_loop_until_keyboard_int
                 "max_feature_ci_width: 0.02",
                 "snapshot_name_prefix: yaml_prefix",
                 "baseline_update: true",
-                "baseline_learning_rate: 0.10",
-                "baseline_evidence_smoothing: 5000.0",
-                "baseline_max_delta: 0.10",
-                "baseline_min_impressions: 1000",
                 "baseline_max_ci_width: 0.02",
                 "dry_run: true",
             ]

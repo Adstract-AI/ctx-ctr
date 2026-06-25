@@ -10,9 +10,5 @@ min_feature_impressions: 500
 max_feature_ci_width: 0.02
 snapshot_name_prefix: flink_weight_update
 baseline_update: true
-baseline_learning_rate: 0.10
-baseline_evidence_smoothing: 5000.0
-baseline_max_delta: 0.10
-baseline_min_impressions: 1000
-baseline_max_ci_width: 0.02
+baseline_max_ci_width: 0.005
 dry_run: false

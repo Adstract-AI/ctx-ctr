@@ -88,14 +88,13 @@ Compute uncertainty:
 
 ```text
 variance = beta_variance(alpha_posterior, beta_posterior)
-ci_low, ci_high = clipped_confidence_interval(posterior_ctr, variance, 1.96)
+ci_low, ci_high = clipped_confidence_interval(posterior_ctr, variance, 1.645)
 ci_width = ci_high - ci_low
 ```
 
 Baseline guards:
 
 ```text
-global_impressions >= baseline_min_impressions
 ci_width <= baseline_max_ci_width
 ```
 
@@ -109,13 +108,8 @@ If guards fail:
 If guards pass:
 
 ```text
-target_w0 = logit(clipped_posterior_ctr)
-eta = baseline_learning_rate * global_impressions / (
-    global_impressions + baseline_evidence_smoothing
-)
-raw_delta = eta * (target_w0 - old_w0)
-delta = clip(raw_delta, -baseline_max_delta, baseline_max_delta)
-new_w0 = old_w0 + delta
+new_w0 = logit(clipped_posterior_ctr)
+delta = new_w0 - old_w0
 ```
 
 Use a safe logit clip before calling `logit`.

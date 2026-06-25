@@ -105,7 +105,8 @@ Baseline learning:
 - use all valid buckets where `impressions > 0` and `clicks <= impressions`
 - aggregate global impressions and clicks
 - combine the aggregate evidence with the current baseline prior
-- update `w0` only when minimum-impression and confidence-interval guards pass
+- direct-recompute `w0 = logit(posterior_global_ctr)` when the 90% confidence
+  interval width guard passes
 - skip the whole model write when baseline update is enabled but guards fail
 
 ## Disabling Baseline Updates
@@ -137,11 +138,7 @@ feature-family updates may still write Redis and PostgreSQL snapshots.
 - `--snapshot-name-prefix`: default `flink_weight_update`
 - `--baseline-update` / `--no-baseline-update`: enable or disable global
   baseline updates. Default `true`.
-- `--baseline-learning-rate`: default `0.10`
-- `--baseline-evidence-smoothing`: default `5000`
-- `--baseline-max-delta`: default `0.10`
-- `--baseline-min-impressions`: default `1000`
-- `--baseline-max-ci-width`: default `0.02`
+- `--baseline-max-ci-width`: default `0.005`
 - `--dry-run`: compute updates without writing Redis or PostgreSQL
 
 CLI flags override values from the YAML config.
@@ -155,9 +152,7 @@ CLI flags override values from the YAML config.
   `min_feature_impressions`, `max_feature_ci_width`,
   `snapshot_name_prefix`: Weight-learning controls.
 - `baseline_update`: Enable global baseline updates.
-- `baseline_learning_rate`, `baseline_evidence_smoothing`,
-  `baseline_max_delta`, `baseline_min_impressions`,
-  `baseline_max_ci_width`: Baseline-learning controls and guards.
+- `baseline_max_ci_width`: Baseline CI guard for direct recomputation.
 - `dry_run`: Compute without writing Redis or PostgreSQL.
 
 ## Example Verification
