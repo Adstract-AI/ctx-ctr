@@ -57,7 +57,7 @@ Expected model shape:
   },
   "metrics": {
     "baseline_ctr": 0.02,
-    "prior_strength": 100.0
+    "triplet_prior_strength": 100.0
   }
 }
 ```
@@ -124,7 +124,7 @@ Redis:
 
 - overwrite `weights:current` with the updated model payload
 - keep `w0` exactly unchanged
-- keep the existing `metrics.baseline_ctr` and `metrics.prior_strength`
+- keep existing model metric prior strengths
 - update `snapshot_name` with the new generated snapshot name
 
 PostgreSQL:

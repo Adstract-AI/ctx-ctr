@@ -225,7 +225,7 @@ class WeightUpdateService:
                 if config.baseline_update
                 else current_model.metrics.baseline_ctr
             ),
-            prior_strength=current_model.metrics.prior_strength,
+            triplet_prior_strength=current_model.metrics.triplet_prior_strength,
             global_prior_strength=current_model.metrics.global_prior_strength,
             family_prior_strengths=current_model.metrics.family_prior_strengths,
         )

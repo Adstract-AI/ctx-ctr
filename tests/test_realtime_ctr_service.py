@@ -80,7 +80,7 @@ def build_model() -> CtrModelSnapshot:
         metrics=CtrModelMetrics(
             baseline_ctr=0.02,
             global_prior_strength=500.0,
-            prior_strength=100.0,
+            triplet_prior_strength=100.0,
             family_prior_strengths={"ad": 200.0, "domain": 200.0, "context": 150.0},
         ),
     )

@@ -7,4 +7,4 @@ consumer_group: ctx-ctr-flink-realtime
 parallelism: 1
 checkpoint_interval_ms: 10000
 kafka_connector_jar: jars/flink-sql-connector-kafka-3.2.0-1.19.jar
-log_every: 1
+log_every: 10

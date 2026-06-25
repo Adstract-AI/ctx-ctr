@@ -70,7 +70,7 @@ global_clicks = sum(bucket.clicks)
 Use the current model metrics:
 
 ```text
-prior_strength = weights:current.metrics.prior_strength
+prior_strength = weights:current.metrics.global_prior_strength
 old_baseline_ctr = sigmoid(old_w0)
 ```
 
@@ -136,7 +136,9 @@ metrics.baseline_ctr = sigmoid(new_w0)
 Keep:
 
 ```text
-metrics.prior_strength
+metrics.triplet_prior_strength
+metrics.global_prior_strength
+metrics.family_prior_strengths
 ```
 
 from the previous model.

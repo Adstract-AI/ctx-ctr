@@ -118,7 +118,7 @@ class CtrModelMetrics(BaseModel):
 
     baseline_ctr: float = Field(gt=0, lt=1)
     global_prior_strength: float = Field(gt=0)
-    prior_strength: float = Field(gt=0)
+    triplet_prior_strength: float = Field(gt=0)
     family_prior_strengths: dict[str, float]
 
     model_config = ConfigDict(frozen=True)

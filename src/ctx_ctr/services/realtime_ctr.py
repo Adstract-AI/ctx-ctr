@@ -86,8 +86,8 @@ class RealtimeCtrUpdateService:
             + self._model.weights.w_dom.get(bucket_key.publisher_domain, 0.0)
             + self._model.weights.w_ctx.get(bucket_key.conversation_category, 0.0)
         )
-        alpha_prior = prior_mean * self._model.metrics.prior_strength
-        beta_prior = (1.0 - prior_mean) * self._model.metrics.prior_strength
+        alpha_prior = prior_mean * self._model.metrics.triplet_prior_strength
+        beta_prior = (1.0 - prior_mean) * self._model.metrics.triplet_prior_strength
         return self._build_bucket(
             bucket_key=bucket_key,
             impressions=0,

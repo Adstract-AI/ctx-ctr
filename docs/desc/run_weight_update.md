@@ -71,7 +71,8 @@ The accepted Redis model payload includes:
 - updated `w_ad`, `w_dom`, and `w_ctx`
 - updated `metrics.baseline_ctr`
 - prior strengths from model metrics unchanged:
-  `prior_strength`, `global_prior_strength`, and `family_prior_strengths`
+  `triplet_prior_strength`, `global_prior_strength`, and
+  `family_prior_strengths`
 
 ## PostgreSQL Output
 

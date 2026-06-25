@@ -77,7 +77,7 @@ def build_seed_values_dataset(
         metrics=SeedModelMetrics(
             baseline_ctr=baseline_prior_mean,
             global_prior_strength=global_prior_strength,
-            prior_strength=triplet_prior_strength,
+            triplet_prior_strength=triplet_prior_strength,
             family_prior_strengths={
                 "ad": ad_prior_strength,
                 "domain": domain_prior_strength,
