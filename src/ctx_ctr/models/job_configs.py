@@ -10,6 +10,14 @@ from ctx_ctr.constants import (
     DEFAULT_CTR_TRUST_MIN_IMPRESSIONS,
     DEFAULT_CTR_TRUST_Z_SCORE,
     DEFAULT_FLINK_KAFKA_CONNECTOR_JAR,
+    DEFAULT_WEIGHT_UPDATE_BASELINE_MAX_CI_WIDTH,
+    DEFAULT_WEIGHT_UPDATE_EVIDENCE_SMOOTHING,
+    DEFAULT_WEIGHT_UPDATE_INTERVAL_SECONDS,
+    DEFAULT_WEIGHT_UPDATE_LEARNING_RATE,
+    DEFAULT_WEIGHT_UPDATE_MAX_DELTA,
+    DEFAULT_WEIGHT_UPDATE_MAX_FEATURE_CI_WIDTH,
+    DEFAULT_WEIGHT_UPDATE_MIN_FEATURE_IMPRESSIONS,
+    DEFAULT_WEIGHT_UPDATE_RIDGE,
 )
 from ctx_ctr.env_variables import (
     CLICK_TOPIC,
@@ -112,17 +120,26 @@ class RunWeightUpdateJobConfig(BaseModel):
 
     redis_url: str = REDIS_URL
     postgres_dsn: str = POSTGRES_DSN
-    interval_seconds: int = Field(default=3600, gt=0)
+    interval_seconds: int = Field(default=DEFAULT_WEIGHT_UPDATE_INTERVAL_SECONDS, gt=0)
     once: bool = False
-    learning_rate: float = Field(default=0.25, gt=0)
-    evidence_smoothing: float = Field(default=1000.0, ge=0)
-    ridge: float = Field(default=0.01, ge=0)
-    max_delta: float = Field(default=0.25, gt=0)
-    min_feature_impressions: int = Field(default=500, ge=1)
-    max_feature_ci_width: float = Field(default=0.02, gt=0)
+    learning_rate: float = Field(default=DEFAULT_WEIGHT_UPDATE_LEARNING_RATE, gt=0)
+    evidence_smoothing: float = Field(default=DEFAULT_WEIGHT_UPDATE_EVIDENCE_SMOOTHING, ge=0)
+    ridge: float = Field(default=DEFAULT_WEIGHT_UPDATE_RIDGE, ge=0)
+    max_delta: float = Field(default=DEFAULT_WEIGHT_UPDATE_MAX_DELTA, gt=0)
+    min_feature_impressions: int = Field(
+        default=DEFAULT_WEIGHT_UPDATE_MIN_FEATURE_IMPRESSIONS,
+        ge=1,
+    )
+    max_feature_ci_width: float = Field(
+        default=DEFAULT_WEIGHT_UPDATE_MAX_FEATURE_CI_WIDTH,
+        gt=0,
+    )
     snapshot_name_prefix: str = Field(default="flink_weight_update", min_length=1)
     baseline_update: bool = True
-    baseline_max_ci_width: float = Field(default=0.005, gt=0)
+    baseline_max_ci_width: float = Field(
+        default=DEFAULT_WEIGHT_UPDATE_BASELINE_MAX_CI_WIDTH,
+        gt=0,
+    )
     dry_run: bool = False
 
     model_config = ConfigDict(frozen=True)
