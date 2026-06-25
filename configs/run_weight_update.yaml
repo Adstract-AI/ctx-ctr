@@ -6,7 +6,8 @@ learning_rate: 0.25
 evidence_smoothing: 1000.0
 ridge: 0.01
 max_delta: 0.25
-min_trusted_buckets: 1
+min_feature_impressions: 500
+max_feature_ci_width: 0.02
 snapshot_name_prefix: flink_weight_update
 baseline_update: true
 baseline_learning_rate: 0.10

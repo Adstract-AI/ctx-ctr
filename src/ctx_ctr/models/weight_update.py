@@ -25,7 +25,8 @@ class WeightUpdateRunConfig(BaseModel):
     evidence_smoothing: float = Field(ge=0)
     ridge: float = Field(ge=0)
     max_delta: float = Field(gt=0)
-    min_trusted_buckets: int = Field(ge=1)
+    min_feature_impressions: int = Field(ge=1)
+    max_feature_ci_width: float = Field(gt=0)
     snapshot_name_prefix: str = Field(min_length=1)
     baseline_update: bool = True
     baseline_learning_rate: float = Field(default=0.10, gt=0)
@@ -44,14 +45,21 @@ class WeightUpdateRunMetrics(BaseModel):
     input_bucket_count: int = Field(ge=0)
     valid_bucket_count: int = Field(ge=0)
     invalid_bucket_count: int = Field(ge=0)
-    trusted_bucket_count: int = Field(ge=0)
-    skipped_bucket_count: int = Field(ge=0)
+    ad_feature_bucket_count: int = Field(ge=0)
+    domain_feature_bucket_count: int = Field(ge=0)
+    context_feature_bucket_count: int = Field(ge=0)
+    updated_feature_bucket_count: int = Field(ge=0)
+    skipped_feature_bucket_count: int = Field(ge=0)
+    insufficient_impression_feature_count: int = Field(ge=0)
+    wide_ci_feature_count: int = Field(ge=0)
     unknown_feature_count: int = Field(ge=0)
     max_absolute_weight_delta: float = Field(ge=0)
     learning_rate: float = Field(gt=0)
     evidence_smoothing: float = Field(ge=0)
     ridge: float = Field(ge=0)
     max_delta: float = Field(gt=0)
+    min_feature_impressions: int = Field(ge=1)
+    max_feature_ci_width: float = Field(gt=0)
     dry_run: bool
     w0_unchanged: bool
     old_w0: float

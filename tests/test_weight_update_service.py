@@ -14,19 +14,23 @@ from ctx_ctr.models.weight_update import (
     RedisBucketScanResult,
     WeightUpdateResult,
     WeightUpdateRunConfig,
-    WeightUpdateRunMetrics,
 )
-from ctx_ctr.services.weight_update_service import WeightUpdateService
-from ctx_ctr.services.ctr_math import sigmoid
+from ctx_ctr.services.ctr_math import beta_variance, clipped_confidence_interval, safe_logit, sigmoid
+from ctx_ctr.services.weight_update_service import FEATURE_UPDATE_Z_SCORE, WeightUpdateService
 
 
 class FakeRedisStore:
-    def __init__(self, snapshot: SeedModelSnapshot, buckets: list[SeedBucketStatistic]) -> None:
+    def __init__(
+        self,
+        snapshot: SeedModelSnapshot,
+        buckets: list[SeedBucketStatistic],
+        invalid_bucket_count: int = 0,
+    ) -> None:
         self.current_snapshot = snapshot
         self.scan_result = RedisBucketScanResult(
-            scanned_key_count=len(buckets),
+            scanned_key_count=len(buckets) + invalid_bucket_count,
             valid_bucket_count=len(buckets),
-            invalid_bucket_count=0,
+            invalid_bucket_count=invalid_bucket_count,
             buckets=buckets,
         )
         self.written_snapshot: SeedModelSnapshot | None = None
@@ -43,40 +47,62 @@ class FakeRedisStore:
 
 class FakePostgresWriter:
     def __init__(self) -> None:
-        self.inserted: list[tuple[SeedModelSnapshot, WeightUpdateRunMetrics]] = []
+        self.inserted: list[object] = []
 
-    def insert_model_snapshot(
-        self,
-        snapshot: SeedModelSnapshot,
-        metrics: WeightUpdateRunMetrics,
-    ) -> int:
+    def insert_model_snapshot(self, snapshot: SeedModelSnapshot, metrics: object) -> int:
         self.inserted.append((snapshot, metrics))
         return 101
 
 
-def test_only_trusted_buckets_are_used() -> None:
+def test_triplet_buckets_are_aggregated_into_single_feature_buckets() -> None:
     snapshot = build_snapshot()
-    trusted_bucket = build_bucket(ctr=0.12, trusted=True)
-    untrusted_bucket = build_bucket(
-        ad_category="travel",
-        publisher_domain="tech.example",
-        conversation_category="gaming",
-        ctr=0.9,
-        clicks=90,
-        impressions=100,
-        trusted=False,
-    )
+    buckets = [
+        build_bucket(
+            ad_category="finance",
+            publisher_domain="news.example",
+            conversation_category="personal_finance",
+            impressions=600,
+            clicks=60,
+        ),
+        build_bucket(
+            ad_category="finance",
+            publisher_domain="tech.example",
+            conversation_category="gaming",
+            impressions=500,
+            clicks=50,
+        ),
+        build_bucket(
+            ad_category="travel",
+            publisher_domain="news.example",
+            conversation_category="gaming",
+            impressions=500,
+            clicks=25,
+        ),
+    ]
 
-    trusted_only = run_service(snapshot=snapshot, buckets=[trusted_bucket], dry_run=True)
-    with_untrusted = run_service(
+    result = run_service(snapshot=snapshot, buckets=buckets, dry_run=True, baseline_update=False)
+
+    assert result.metrics.ad_feature_bucket_count == 2
+    assert result.metrics.domain_feature_bucket_count == 2
+    assert result.metrics.context_feature_bucket_count == 2
+    assert result.metrics.updated_feature_bucket_count == 6
+    assert result.metrics.skipped_feature_bucket_count == 0
+
+
+def test_trusted_flag_does_not_control_feature_weight_learning() -> None:
+    snapshot = build_snapshot()
+    trusted_false_bucket = build_bucket(impressions=1000, clicks=120, trusted=False)
+
+    result = run_service(
         snapshot=snapshot,
-        buckets=[trusted_bucket, untrusted_bucket],
+        buckets=[trusted_false_bucket],
         dry_run=True,
+        baseline_update=False,
     )
 
-    assert trusted_only.model_snapshot.weights == with_untrusted.model_snapshot.weights
-    assert with_untrusted.metrics.trusted_bucket_count == 1
-    assert with_untrusted.metrics.skipped_bucket_count == 1
+    assert result.accepted is True
+    assert result.metrics.updated_feature_bucket_count == 3
+    assert result.model_snapshot.weights.w_ad != snapshot.weights.w_ad
 
 
 def test_unknown_feature_values_are_initialized_safely() -> None:
@@ -85,13 +111,11 @@ def test_unknown_feature_values_are_initialized_safely() -> None:
         ad_category="education",
         publisher_domain="blog.example",
         conversation_category="wellness",
-        ctr=0.08,
-        clicks=16,
-        impressions=200,
-        trusted=True,
+        impressions=1000,
+        clicks=80,
     )
 
-    result = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True)
+    result = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True, baseline_update=False)
 
     assert result.metrics.unknown_feature_count == 3
     assert "education" in result.model_snapshot.weights.w_ad
@@ -99,9 +123,141 @@ def test_unknown_feature_values_are_initialized_safely() -> None:
     assert "wellness" in result.model_snapshot.weights.w_ctx
 
 
+def test_single_feature_update_math_matches_document_formula() -> None:
+    snapshot = build_snapshot()
+    bucket = build_bucket(
+        ad_category="finance",
+        publisher_domain="news.example",
+        conversation_category="personal_finance",
+        impressions=1000,
+        clicks=120,
+    )
+    config = build_config(dry_run=True, baseline_update=False, ridge=0.0, max_delta=10.0)
+
+    result = WeightUpdateService(
+        redis_store=FakeRedisStore(snapshot, [bucket]),
+        postgres_writer=FakePostgresWriter(),
+    ).recalibrate(config)
+
+    old_weight = snapshot.weights.w_ad["finance"]
+    prior_mean = sigmoid(snapshot.w0 + old_weight)
+    alpha_posterior = prior_mean * snapshot.metrics.prior_strength + bucket.clicks
+    beta_posterior = (
+        (1.0 - prior_mean) * snapshot.metrics.prior_strength
+        + bucket.impressions
+        - bucket.clicks
+    )
+    posterior_ctr = alpha_posterior / (alpha_posterior + beta_posterior)
+    delta_star = safe_logit(posterior_ctr) - snapshot.w0
+    eta = config.learning_rate * bucket.impressions / (
+        bucket.impressions + config.evidence_smoothing
+    )
+    raw_finance_weight = old_weight + eta * (delta_star - old_weight)
+    unchanged_travel_weight = snapshot.weights.w_ad["travel"]
+    centered_mean = (raw_finance_weight + unchanged_travel_weight) / 2
+
+    assert result.model_snapshot.weights.w_ad["finance"] == pytest.approx(
+        raw_finance_weight - centered_mean
+    )
+
+
+def test_ridge_regularization_reduces_the_updated_weight() -> None:
+    snapshot = build_snapshot()
+    bucket = build_bucket(impressions=1000, clicks=180)
+
+    without_ridge = run_service(
+        snapshot=snapshot,
+        buckets=[bucket],
+        dry_run=True,
+        ridge=0.0,
+        max_delta=10.0,
+        baseline_update=False,
+    )
+    with_ridge = run_service(
+        snapshot=snapshot,
+        buckets=[bucket],
+        dry_run=True,
+        ridge=0.1,
+        max_delta=10.0,
+        baseline_update=False,
+    )
+
+    assert (
+        with_ridge.model_snapshot.weights.w_ad["finance"]
+        < without_ridge.model_snapshot.weights.w_ad["finance"]
+    )
+
+
+def test_max_delta_clipping_is_applied_before_centering() -> None:
+    snapshot = build_snapshot()
+    bucket = build_bucket(impressions=1000, clicks=900)
+
+    result = run_service(
+        snapshot=snapshot,
+        buckets=[bucket],
+        dry_run=True,
+        max_delta=0.01,
+        baseline_update=False,
+    )
+
+    assert result.metrics.max_absolute_weight_delta == pytest.approx(0.01)
+
+
+def test_feature_buckets_failing_min_impression_guard_do_not_update() -> None:
+    snapshot = build_snapshot()
+    bucket = build_bucket(impressions=499, clicks=50)
+
+    result = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True, baseline_update=False)
+
+    assert result.accepted is False
+    assert result.metrics.updated_feature_bucket_count == 0
+    assert result.metrics.insufficient_impression_feature_count == 3
+    assert result.skipped_reason == "no_feature_buckets_passed_guards"
+
+
+def test_feature_buckets_failing_ci_guard_do_not_update() -> None:
+    snapshot = build_snapshot()
+    bucket = build_bucket(impressions=500, clicks=250)
+
+    result = run_service(
+        snapshot=snapshot,
+        buckets=[bucket],
+        dry_run=True,
+        baseline_update=False,
+        max_feature_ci_width=0.001,
+    )
+
+    assert result.accepted is False
+    assert result.metrics.updated_feature_bucket_count == 0
+    assert result.metrics.wide_ci_feature_count == 3
+
+
+def test_invalid_triplet_buckets_are_counted_and_skipped_for_feature_learning() -> None:
+    snapshot = build_snapshot()
+    valid_bucket = build_bucket(impressions=1000, clicks=120)
+    zero_impression_bucket = build_bucket(
+        ad_category="travel",
+        publisher_domain="tech.example",
+        conversation_category="gaming",
+        impressions=0,
+        clicks=0,
+    )
+
+    result = run_service(
+        snapshot=snapshot,
+        buckets=[valid_bucket, zero_impression_bucket],
+        dry_run=True,
+        baseline_update=False,
+    )
+
+    assert result.metrics.invalid_bucket_count == 1
+    assert result.metrics.ad_feature_bucket_count == 1
+    assert result.metrics.updated_feature_bucket_count == 3
+
+
 def test_baseline_update_can_change_w0_and_baseline_ctr() -> None:
     snapshot = build_snapshot()
-    bucket = build_bucket(ctr=0.08, clicks=80, impressions=1000, trusted=True)
+    bucket = build_bucket(impressions=1000, clicks=80)
 
     result = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True)
 
@@ -115,29 +271,11 @@ def test_baseline_update_can_change_w0_and_baseline_ctr() -> None:
     )
     assert result.metrics.aggregate_impressions == 1000
     assert result.metrics.aggregate_clicks == 80
-    assert result.model_snapshot.weights.w_ad != snapshot.weights.w_ad
-    assert result.model_snapshot.weights.w_dom != snapshot.weights.w_dom
-    assert result.model_snapshot.weights.w_ctx != snapshot.weights.w_ctx
-
-
-def test_baseline_max_delta_clips_w0_movement() -> None:
-    snapshot = build_snapshot()
-    bucket = build_bucket(ctr=0.30, clicks=300, impressions=1000, trusted=True)
-
-    result = run_service(
-        snapshot=snapshot,
-        buckets=[bucket],
-        dry_run=True,
-        baseline_max_delta=0.01,
-    )
-
-    assert result.metrics.baseline_delta == pytest.approx(0.01)
-    assert result.model_snapshot.w0 == pytest.approx(snapshot.w0 + 0.01)
 
 
 def test_baseline_guard_failure_skips_whole_model_write() -> None:
     snapshot = build_snapshot()
-    bucket = build_bucket(ctr=0.14, clicks=28, impressions=200, trusted=True)
+    bucket = build_bucket(impressions=200, clicks=28)
     redis = FakeRedisStore(snapshot, [bucket])
     postgres = FakePostgresWriter()
     config = build_config(dry_run=False, baseline_min_impressions=1000)
@@ -153,32 +291,11 @@ def test_baseline_guard_failure_skips_whole_model_write() -> None:
     assert result.skipped_reason == "baseline_guard_failed:insufficient_baseline_impressions"
 
 
-def test_baseline_update_false_keeps_w0_and_allows_feature_update() -> None:
-    snapshot = build_snapshot()
-    bucket = build_bucket(ctr=0.14, clicks=28, impressions=200, trusted=True)
-
-    result = run_service(
-        snapshot=snapshot,
-        buckets=[bucket],
-        dry_run=True,
-        baseline_update=False,
-    )
-
-    assert result.accepted is True
-    assert result.model_snapshot.w0 == snapshot.w0
-    assert result.model_snapshot.metrics.baseline_ctr == snapshot.metrics.baseline_ctr
-    assert result.metrics.w0_unchanged is True
-    assert result.metrics.baseline_update_enabled is False
-    assert result.metrics.baseline_update_applied is False
-    assert result.metrics.baseline_guard_reason == "baseline_update_disabled"
-    assert result.model_snapshot.weights.w_ad != snapshot.weights.w_ad
-
-
 def test_weight_families_remain_centered_after_updates() -> None:
     snapshot = build_snapshot()
-    bucket = build_bucket(ctr=0.11, clicks=22, impressions=200, trusted=True)
+    bucket = build_bucket(impressions=1000, clicks=110)
 
-    result = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True)
+    result = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True, baseline_update=False)
 
     for family in [
         result.model_snapshot.weights.w_ad,
@@ -188,31 +305,9 @@ def test_weight_families_remain_centered_after_updates() -> None:
         assert math.isclose(sum(family.values()) / len(family), 0.0, abs_tol=1e-12)
 
 
-def test_ridge_regularization_reduces_the_updated_weight() -> None:
-    snapshot = build_snapshot()
-    bucket = build_bucket(ctr=0.18, clicks=36, impressions=200, trusted=True)
-
-    without_ridge = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True, ridge=0.0)
-    with_ridge = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True, ridge=0.1)
-
-    assert (
-        with_ridge.model_snapshot.weights.w_ad["finance"]
-        < without_ridge.model_snapshot.weights.w_ad["finance"]
-    )
-
-
-def test_max_delta_clipping_is_applied_before_centering() -> None:
-    snapshot = build_snapshot()
-    bucket = build_bucket(ctr=0.9, clicks=180, impressions=200, trusted=True)
-
-    result = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True, max_delta=0.01)
-
-    assert result.metrics.max_absolute_weight_delta == pytest.approx(0.01)
-
-
 def test_dry_run_does_not_write_redis_or_postgres() -> None:
     snapshot = build_snapshot()
-    bucket = build_bucket(ctr=0.13, clicks=130, impressions=1000, trusted=True)
+    bucket = build_bucket(impressions=1000, clicks=130)
     redis = FakeRedisStore(snapshot, [bucket])
     postgres = FakePostgresWriter()
     config = build_config(dry_run=True)
@@ -228,7 +323,7 @@ def test_dry_run_does_not_write_redis_or_postgres() -> None:
 
 def test_real_run_writes_redis_and_postgres() -> None:
     snapshot = build_snapshot()
-    bucket = build_bucket(ctr=0.13, clicks=130, impressions=1000, trusted=True)
+    bucket = build_bucket(impressions=1000, clicks=130)
     redis = FakeRedisStore(snapshot, [bucket])
     postgres = FakePostgresWriter()
     config = build_config(dry_run=False)
@@ -242,55 +337,27 @@ def test_real_run_writes_redis_and_postgres() -> None:
     assert len(postgres.inserted) == 1
 
 
-def test_untrusted_valid_buckets_count_for_baseline_but_not_feature_weights() -> None:
+def test_single_feature_ci_uses_document_90_percent_z_score() -> None:
     snapshot = build_snapshot()
-    trusted_bucket = build_bucket(ctr=0.10, clicks=20, impressions=200, trusted=True)
-    untrusted_bucket = build_bucket(
-        ad_category="travel",
-        publisher_domain="tech.example",
-        conversation_category="gaming",
-        ctr=0.20,
-        clicks=160,
-        impressions=800,
-        trusted=False,
+    bucket = build_bucket(impressions=1000, clicks=100)
+    result = run_service(snapshot=snapshot, buckets=[bucket], dry_run=True, baseline_update=False)
+
+    prior_mean = sigmoid(snapshot.w0 + snapshot.weights.w_ad["finance"])
+    alpha_posterior = prior_mean * snapshot.metrics.prior_strength + bucket.clicks
+    beta_posterior = (
+        (1.0 - prior_mean) * snapshot.metrics.prior_strength
+        + bucket.impressions
+        - bucket.clicks
+    )
+    posterior_ctr = alpha_posterior / (alpha_posterior + beta_posterior)
+    variance = beta_variance(alpha_posterior, beta_posterior)
+    ci_low, ci_high = clipped_confidence_interval(
+        posterior_ctr,
+        variance,
+        FEATURE_UPDATE_Z_SCORE,
     )
 
-    result = run_service(
-        snapshot=snapshot,
-        buckets=[trusted_bucket, untrusted_bucket],
-        dry_run=True,
-    )
-
-    assert result.metrics.trusted_bucket_count == 1
-    assert result.metrics.skipped_bucket_count == 1
-    assert result.metrics.valid_baseline_bucket_count == 2
-    assert result.metrics.aggregate_impressions == 1000
-    assert result.metrics.aggregate_clicks == 180
-
-
-def test_invalid_baseline_buckets_are_counted_and_skipped() -> None:
-    snapshot = build_snapshot()
-    valid_bucket = build_bucket(ctr=0.10, clicks=100, impressions=1000, trusted=True)
-    zero_impression_bucket = build_bucket(
-        ad_category="travel",
-        publisher_domain="tech.example",
-        conversation_category="gaming",
-        ctr=0.02,
-        clicks=0,
-        impressions=0,
-        trusted=False,
-    )
-    redis = FakeRedisStore(snapshot, [valid_bucket, zero_impression_bucket])
-    postgres = FakePostgresWriter()
-
-    result = WeightUpdateService(redis_store=redis, postgres_writer=postgres).recalibrate(
-        build_config(dry_run=True)
-    )
-
-    assert result.metrics.valid_baseline_bucket_count == 1
-    assert result.metrics.invalid_baseline_bucket_count == 1
-    assert result.metrics.aggregate_impressions == 1000
-    assert result.metrics.aggregate_clicks == 100
+    assert ci_high - ci_low <= result.metrics.max_feature_ci_width
 
 
 def build_snapshot() -> SeedModelSnapshot:
@@ -311,17 +378,15 @@ def build_bucket(
     ad_category: str = "finance",
     publisher_domain: str = "news.example",
     conversation_category: str = "personal_finance",
-    impressions: int = 200,
-    clicks: int = 20,
-    ctr: float = 0.1,
+    impressions: int = 1000,
+    clicks: int = 100,
     trusted: bool = True,
 ) -> SeedBucketStatistic:
+    ctr = clicks / impressions if impressions > 0 else 0.0
     alpha_prior = 2.0
     beta_prior = 98.0
     alpha_posterior = alpha_prior + clicks
     beta_posterior = beta_prior + impressions - clicks
-    ci_low = max(0.0, ctr - 0.01)
-    ci_high = min(1.0, ctr + 0.01)
     return SeedBucketStatistic(
         ad_category=ad_category,
         publisher_domain=publisher_domain,
@@ -334,8 +399,8 @@ def build_bucket(
         beta_posterior=beta_posterior,
         ctr=ctr,
         variance=0.0001,
-        ci_low=ci_low,
-        ci_high=ci_high,
+        ci_low=max(0.0, ctr - 0.01),
+        ci_high=min(1.0, ctr + 0.01),
         trusted=trusted,
     )
 
@@ -345,6 +410,8 @@ def build_config(
     dry_run: bool,
     ridge: float = 0.01,
     max_delta: float = 0.25,
+    min_feature_impressions: int = 500,
+    max_feature_ci_width: float = 1.0,
     baseline_update: bool = True,
     baseline_max_delta: float = 0.10,
     baseline_min_impressions: int = 1,
@@ -354,7 +421,8 @@ def build_config(
         evidence_smoothing=1000.0,
         ridge=ridge,
         max_delta=max_delta,
-        min_trusted_buckets=1,
+        min_feature_impressions=min_feature_impressions,
+        max_feature_ci_width=max_feature_ci_width,
         snapshot_name_prefix="flink_weight_update",
         baseline_update=baseline_update,
         baseline_learning_rate=0.10,
@@ -373,6 +441,8 @@ def run_service(
     dry_run: bool,
     ridge: float = 0.01,
     max_delta: float = 0.25,
+    min_feature_impressions: int = 500,
+    max_feature_ci_width: float = 1.0,
     baseline_update: bool = True,
     baseline_max_delta: float = 0.10,
 ) -> WeightUpdateResult:
@@ -382,6 +452,8 @@ def run_service(
         dry_run=dry_run,
         ridge=ridge,
         max_delta=max_delta,
+        min_feature_impressions=min_feature_impressions,
+        max_feature_ci_width=max_feature_ci_width,
         baseline_update=baseline_update,
         baseline_max_delta=baseline_max_delta,
     )

@@ -102,7 +102,8 @@ class RunWeightUpdateJobConfig(BaseModel):
     evidence_smoothing: float = Field(default=1000.0, ge=0)
     ridge: float = Field(default=0.01, ge=0)
     max_delta: float = Field(default=0.25, gt=0)
-    min_trusted_buckets: int = Field(default=1, ge=1)
+    min_feature_impressions: int = Field(default=500, ge=1)
+    max_feature_ci_width: float = Field(default=0.02, gt=0)
     snapshot_name_prefix: str = Field(default="flink_weight_update", min_length=1)
     baseline_update: bool = True
     baseline_learning_rate: float = Field(default=0.10, gt=0)

@@ -42,7 +42,8 @@ ctr:*
 
 For feature-family updates, keep Task 002 behavior:
 
-- use trusted buckets only
+- aggregate triplet buckets into single-feature buckets
+- use single-feature minimum-impression and CI-width guards
 - update `w_ad`, `w_dom`, and `w_ctx`
 - re-center each family
 

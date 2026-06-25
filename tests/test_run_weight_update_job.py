@@ -65,7 +65,8 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
                 "evidence_smoothing: 222.0",
                 "ridge: 0.03",
                 "max_delta: 0.04",
-                "min_trusted_buckets: 2",
+                "min_feature_impressions: 222",
+                "max_feature_ci_width: 0.03",
                 "snapshot_name_prefix: yaml_prefix",
                 "baseline_update: true",
                 "baseline_learning_rate: 0.12",
@@ -127,7 +128,8 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
     assert run_config.evidence_smoothing == 222.0
     assert run_config.ridge == 0.03
     assert run_config.max_delta == 0.04
-    assert run_config.min_trusted_buckets == 2
+    assert run_config.min_feature_impressions == 222
+    assert run_config.max_feature_ci_width == 0.03
     assert run_config.snapshot_name_prefix == "yaml_prefix"
     assert run_config.baseline_update is False
     assert run_config.baseline_learning_rate == 0.12
@@ -137,7 +139,8 @@ def test_run_weight_update_uses_yaml_config_and_cli_overrides(
     assert run_config.baseline_max_ci_width == 0.06
     assert run_config.dry_run is True
     assert "Weight update dry-run" in output
-    assert "baseline update enabled: False" in output
+    assert "Baseline Update Enabled" in output
+    assert "False" in output
     assert "Config" in output
     assert str(config_path) in output
 
@@ -158,7 +161,8 @@ def test_run_weight_update_disabled_once_enters_periodic_loop_until_keyboard_int
                 "evidence_smoothing: 1000.0",
                 "ridge: 0.01",
                 "max_delta: 0.25",
-                "min_trusted_buckets: 1",
+                "min_feature_impressions: 500",
+                "max_feature_ci_width: 0.02",
                 "snapshot_name_prefix: yaml_prefix",
                 "baseline_update: true",
                 "baseline_learning_rate: 0.10",
@@ -234,14 +238,21 @@ def build_result(config: WeightUpdateRunConfig) -> WeightUpdateResult:
             input_bucket_count=3,
             valid_bucket_count=3,
             invalid_bucket_count=0,
-            trusted_bucket_count=2,
-            skipped_bucket_count=1,
+            ad_feature_bucket_count=1,
+            domain_feature_bucket_count=1,
+            context_feature_bucket_count=1,
+            updated_feature_bucket_count=3,
+            skipped_feature_bucket_count=0,
+            insufficient_impression_feature_count=0,
+            wide_ci_feature_count=0,
             unknown_feature_count=0,
             max_absolute_weight_delta=0.12,
             learning_rate=config.learning_rate,
             evidence_smoothing=config.evidence_smoothing,
             ridge=config.ridge,
             max_delta=config.max_delta,
+            min_feature_impressions=config.min_feature_impressions,
+            max_feature_ci_width=config.max_feature_ci_width,
             dry_run=config.dry_run,
             w0_unchanged=True,
             old_w0=snapshot.w0,

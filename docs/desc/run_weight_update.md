@@ -40,10 +40,11 @@ configs/run_weight_update.yaml
 Use this job after `seed_values` or after the Task 1 CTR updater has populated
 Redis bucket statistics.
 
-It reads the current model from Redis, learns feature-family weights from
-trusted bucket statistics, updates `w_ad`, `w_dom`, and `w_ctx`, and updates the
-global baseline `w0` when baseline evidence guards pass. Accepted runs write one
-coherent current model back to Redis and store one model snapshot in PostgreSQL.
+It reads the current model from Redis, derives single-feature learning buckets
+from the existing triplet CTR buckets, updates `w_ad`, `w_dom`, and `w_ctx`,
+and updates the global baseline `w0` when baseline evidence guards pass.
+Accepted runs write one coherent current model back to Redis and store one
+model snapshot in PostgreSQL.
 
 ## Required Services
 
@@ -86,12 +87,17 @@ The inserted row stores:
 
 Feature-weight learning:
 
-- use only buckets where `trusted == true`
-- clip bucket CTR before `logit`
-- compute residual targets per family value
-- aggregate targets using bucket impressions as evidence weight
+- aggregate existing triplet Redis buckets into single-feature buckets:
+  `ad_category`, `publisher_domain`, and `conversation_category`
+- ignore the triplet `trusted` flag for weight learning
+- for each single-feature bucket, build a Beta prior from
+  `sigmoid(w0 + w_family[k])`
+- combine the prior with aggregated impressions/clicks to compute posterior CTR
+- compute `z_target = logit(posterior_ctr)` and `delta_star = z_target - w0`
+- update only buckets that pass `min_feature_impressions` and
+  `max_feature_ci_width` guards
 - apply evidence-scaled learning rate, ridge regularization, and max-delta
-  clipping
+  clipping to the feature value
 - re-center each family so its mean stays zero
 
 Baseline learning:
@@ -126,7 +132,8 @@ feature-family updates may still write Redis and PostgreSQL snapshots.
 - `--evidence-smoothing`: default `1000`
 - `--ridge`: default `0.01`
 - `--max-delta`: default `0.25`
-- `--min-trusted-buckets`: default `1`
+- `--min-feature-impressions`: default `500`
+- `--max-feature-ci-width`: default `0.02`
 - `--snapshot-name-prefix`: default `flink_weight_update`
 - `--baseline-update` / `--no-baseline-update`: enable or disable global
   baseline updates. Default `true`.
@@ -145,7 +152,8 @@ CLI flags override values from the YAML config.
 - `interval_seconds`: Periodic sleep interval.
 - `once`: Run one recalibration and exit.
 - `learning_rate`, `evidence_smoothing`, `ridge`, `max_delta`,
-  `min_trusted_buckets`, `snapshot_name_prefix`: Weight-learning controls.
+  `min_feature_impressions`, `max_feature_ci_width`,
+  `snapshot_name_prefix`: Weight-learning controls.
 - `baseline_update`: Enable global baseline updates.
 - `baseline_learning_rate`, `baseline_evidence_smoothing`,
   `baseline_max_delta`, `baseline_min_impressions`,
@@ -171,7 +179,8 @@ docker compose -f docker-compose.yml exec postgres \
 ## Safety Notes
 
 - dry-run mode still reads Redis but does not write Redis or PostgreSQL
-- if fewer than `--min-trusted-buckets` are available, the run is skipped
+- if no single-feature buckets pass feature guards and no baseline update is
+  accepted, the run is skipped
 - if baseline guards fail while baseline updates are enabled, the whole model
   write is skipped so no partial feature-only snapshot is published
 - this job does not update Redis bucket priors

@@ -37,7 +37,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         evidence_smoothing=config.evidence_smoothing,
         ridge=config.ridge,
         max_delta=config.max_delta,
-        min_trusted_buckets=config.min_trusted_buckets,
+        min_feature_impressions=config.min_feature_impressions,
+        max_feature_ci_width=config.max_feature_ci_width,
         snapshot_name_prefix=config.snapshot_name_prefix,
         baseline_update=config.baseline_update,
         baseline_learning_rate=config.baseline_learning_rate,
@@ -52,7 +53,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         f"postgres_dsn={config.postgres_dsn}, once={config.once}, dry_run={config.dry_run}, "
         f"interval_seconds={config.interval_seconds}, learning_rate={config.learning_rate}, "
         f"evidence_smoothing={config.evidence_smoothing}, ridge={config.ridge}, "
-        f"max_delta={config.max_delta}, min_trusted_buckets={config.min_trusted_buckets}, "
+        f"max_delta={config.max_delta}, "
+        f"min_feature_impressions={config.min_feature_impressions}, "
+        f"max_feature_ci_width={config.max_feature_ci_width}, "
         f"baseline_update={config.baseline_update}, "
         f"baseline_learning_rate={config.baseline_learning_rate}, "
         f"baseline_evidence_smoothing={config.baseline_evidence_smoothing}, "
@@ -145,10 +148,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="maximum absolute per-feature update before centering",
     )
     parser.add_argument(
-        "--min-trusted-buckets",
+        "--min-feature-impressions",
         type=int,
         default=None,
-        help="minimum trusted buckets required before a run can write outputs",
+        help="minimum impressions required for a single-feature bucket update",
+    )
+    parser.add_argument(
+        "--max-feature-ci-width",
+        type=float,
+        default=None,
+        help="maximum 90 percent confidence interval width for feature updates",
     )
     parser.add_argument(
         "--snapshot-name-prefix",
@@ -213,7 +222,8 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
         "evidence_smoothing",
         "ridge",
         "max_delta",
-        "min_trusted_buckets",
+        "min_feature_impressions",
+        "max_feature_ci_width",
         "snapshot_name_prefix",
         "baseline_update",
         "baseline_learning_rate",
@@ -268,8 +278,14 @@ def _result_lines(result: WeightUpdateResult) -> list[str]:
         f"redis bucket keys scanned: {result.metrics.input_bucket_count}",
         f"valid buckets parsed: {result.metrics.valid_bucket_count}",
         f"invalid buckets parsed: {result.metrics.invalid_bucket_count}",
-        f"trusted buckets used: {result.metrics.trusted_bucket_count}",
-        f"skipped/untrusted buckets: {result.metrics.skipped_bucket_count}",
+        f"ad feature buckets: {result.metrics.ad_feature_bucket_count}",
+        f"domain feature buckets: {result.metrics.domain_feature_bucket_count}",
+        f"context feature buckets: {result.metrics.context_feature_bucket_count}",
+        f"updated feature buckets: {result.metrics.updated_feature_bucket_count}",
+        f"skipped feature buckets: {result.metrics.skipped_feature_bucket_count}",
+        "insufficient impression feature buckets: "
+        f"{result.metrics.insufficient_impression_feature_count}",
+        f"wide ci feature buckets: {result.metrics.wide_ci_feature_count}",
         f"unknown feature values initialized: {result.metrics.unknown_feature_count}",
         f"w0 unchanged: {result.metrics.w0_unchanged}",
         f"baseline update enabled: {result.metrics.baseline_update_enabled}",
@@ -316,8 +332,14 @@ def _log_result(result: WeightUpdateResult) -> None:
         f"Weight update summary: scanned={result.metrics.input_bucket_count}, "
         f"valid={result.metrics.valid_bucket_count}, "
         f"invalid={result.metrics.invalid_bucket_count}, "
-        f"trusted={result.metrics.trusted_bucket_count}, "
-        f"skipped={result.metrics.skipped_bucket_count}, "
+        f"ad_features={result.metrics.ad_feature_bucket_count}, "
+        f"domain_features={result.metrics.domain_feature_bucket_count}, "
+        f"context_features={result.metrics.context_feature_bucket_count}, "
+        f"updated_features={result.metrics.updated_feature_bucket_count}, "
+        f"skipped_features={result.metrics.skipped_feature_bucket_count}, "
+        f"insufficient_impression_features="
+        f"{result.metrics.insufficient_impression_feature_count}, "
+        f"wide_ci_features={result.metrics.wide_ci_feature_count}, "
         f"unknown_features={result.metrics.unknown_feature_count}, "
         f"w0_unchanged={result.metrics.w0_unchanged}, "
         f"baseline_update={result.metrics.baseline_update_enabled}, "
