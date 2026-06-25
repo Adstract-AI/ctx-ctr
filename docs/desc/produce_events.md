@@ -51,7 +51,6 @@ from the same seeded CTR model weights used by the seed dataset.
   disable progress logs.
 - `--also-unified`: Also publish every event to `ctr.events`.
 - `--dry-run`: Generate and summarize events without publishing to Kafka.
-- `--bootstrap-servers <host:port>`: Kafka bootstrap servers.
 - `--impression-topic <topic>`: Impression output topic.
 - `--click-topic <topic>`: Click output topic.
 - `--event-topic <topic>`: Unified event output topic.
@@ -62,8 +61,9 @@ CLI flags override values from the YAML config.
 
 - `impressions`, `events_per_second`, `random_seed`, `log_every`,
   `also_unified`, `dry_run`: Same meanings as the CLI flags.
-- `bootstrap_servers`, `impression_topic`, `click_topic`, `event_topic`:
-  Kafka connection and output topic settings.
+- `impression_topic`, `click_topic`, `event_topic`: Kafka output topics.
+
+Kafka bootstrap servers come from `KAFKA_BOOTSTRAP_SERVERS` in the environment.
 
 ## Event Counts
 

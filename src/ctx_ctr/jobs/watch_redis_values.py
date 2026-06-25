@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 
 from ctx_ctr.adapters.redis_inspect import RedisInspectAdapter
-from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL
+from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL, REDIS_URL
 from ctx_ctr.job_config_loader import load_job_config, merge_job_config
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
@@ -26,7 +26,6 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Print Redis values for local CTR debugging.")
     parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="path to the job YAML config")
-    parser.add_argument("--redis-url", default=None, help="Redis URL")
     parser.add_argument("--pattern", default=None, help="Redis scan pattern")
     parser.add_argument("--limit", type=int, default=None, help="maximum number of keys to print")
     parser.add_argument(
@@ -46,12 +45,6 @@ def main() -> None:
         action=argparse.BooleanOptionalAction,
         default=None,
         help="pretty-print JSON Redis values",
-    )
-    parser.add_argument(
-        "--only-bucket",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="print only the configured focused bucket",
     )
     parser.add_argument(
         "--bucket",
@@ -80,7 +73,7 @@ def main() -> None:
 
 
 def _run(config: WatchRedisValuesJobConfig) -> None:
-    adapter = RedisInspectAdapter(config.redis_url)
+    adapter = RedisInspectAdapter(REDIS_URL)
     service = RedisInspectService(adapter)
     bucket_key = _bucket_from_config(config)
     snapshots_printed = 0
@@ -91,7 +84,7 @@ def _run(config: WatchRedisValuesJobConfig) -> None:
                 pattern=config.pattern,
                 limit=config.limit,
                 bucket_key=bucket_key,
-                only_bucket=config.only_bucket,
+                only_bucket=bucket_key is not None,
             )
             snapshots_printed += 1
             _print_snapshot(snapshot, pretty_json=config.pretty_json)
@@ -118,13 +111,11 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
 
     overrides: dict[str, object] = {}
     for field_name in (
-        "redis_url",
         "pattern",
         "limit",
         "watch",
         "interval_seconds",
         "pretty_json",
-        "only_bucket",
     ):
         value = getattr(args, field_name)
         if value is not None:

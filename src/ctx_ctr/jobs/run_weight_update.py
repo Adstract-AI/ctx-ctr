@@ -7,7 +7,7 @@ import time
 from collections.abc import Sequence
 from contextlib import AbstractContextManager, nullcontext
 
-from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL
+from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL, POSTGRES_DSN, REDIS_URL
 from ctx_ctr.job_config_loader import load_job_config, merge_job_config
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
@@ -37,35 +37,39 @@ def main(argv: Sequence[str] | None = None) -> None:
         evidence_smoothing=config.evidence_smoothing,
         ridge=config.ridge,
         max_delta=config.max_delta,
-        min_trusted_buckets=config.min_trusted_buckets,
+        min_feature_impressions=config.min_feature_impressions,
+        max_feature_ci_width=config.max_feature_ci_width,
         snapshot_name_prefix=config.snapshot_name_prefix,
+        baseline_update=config.baseline_update,
+        baseline_max_ci_width=config.baseline_max_ci_width,
         dry_run=config.dry_run,
     )
     logger.info(
-        f"Configured weight update job: redis_url={config.redis_url}, "
-        f"postgres_dsn={config.postgres_dsn}, once={config.once}, dry_run={config.dry_run}, "
+        f"Configured weight update job: once={config.once}, dry_run={config.dry_run}, "
         f"interval_seconds={config.interval_seconds}, learning_rate={config.learning_rate}, "
         f"evidence_smoothing={config.evidence_smoothing}, ridge={config.ridge}, "
-        f"max_delta={config.max_delta}, min_trusted_buckets={config.min_trusted_buckets}, "
+        f"max_delta={config.max_delta}, "
+        f"min_feature_impressions={config.min_feature_impressions}, "
+        f"max_feature_ci_width={config.max_feature_ci_width}, "
+        f"baseline_update={config.baseline_update}, "
+        f"baseline_max_ci_width={config.baseline_max_ci_width}, "
         f"snapshot_name_prefix={config.snapshot_name_prefix}, config={args.config}"
     )
 
     try:
-        redis_store = _build_redis_store(config.redis_url)
-        with _open_postgres_writer(config.postgres_dsn, config.dry_run) as postgres_writer:
+        redis_store = _build_redis_store(REDIS_URL)
+        with _open_postgres_writer(POSTGRES_DSN, config.dry_run) as postgres_writer:
             service = WeightUpdateService(redis_store=redis_store, postgres_writer=postgres_writer)
             last_result: WeightUpdateResult | None = None
             if config.once:
                 result = service.recalibrate(run_config)
                 last_result = result
-                _log_result(result)
                 _print_result_summary(result, config_path=args.config)
                 return
 
             while True:
                 result = service.recalibrate(run_config)
                 last_result = result
-                _log_result(result)
                 _print_result_summary(
                     result,
                     config_path=args.config,
@@ -90,12 +94,6 @@ def _build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(description="Run the Task 2 weight update job.")
     parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="path to the job YAML config")
-    parser.add_argument("--redis-url", default=None, help="Redis connection URL")
-    parser.add_argument(
-        "--postgres-dsn",
-        default=None,
-        help="PostgreSQL DSN used for model snapshot history",
-    )
     parser.add_argument(
         "--interval-seconds",
         type=int,
@@ -133,15 +131,33 @@ def _build_parser() -> argparse.ArgumentParser:
         help="maximum absolute per-feature update before centering",
     )
     parser.add_argument(
-        "--min-trusted-buckets",
+        "--min-feature-impressions",
         type=int,
         default=None,
-        help="minimum trusted buckets required before a run can write outputs",
+        help="minimum impressions required for a single-feature bucket update",
+    )
+    parser.add_argument(
+        "--max-feature-ci-width",
+        type=float,
+        default=None,
+        help="maximum 90 percent confidence interval width for feature updates",
     )
     parser.add_argument(
         "--snapshot-name-prefix",
         default=None,
         help="prefix used when generating snapshot names",
+    )
+    parser.add_argument(
+        "--baseline-update",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="enable or disable global baseline w0 updates",
+    )
+    parser.add_argument(
+        "--baseline-max-ci-width",
+        type=float,
+        default=None,
+        help="maximum 90 percent posterior confidence interval width for baseline updates",
     )
     parser.add_argument(
         "--dry-run",
@@ -157,16 +173,17 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
 
     overrides: dict[str, object] = {}
     for field_name in (
-        "redis_url",
-        "postgres_dsn",
         "interval_seconds",
         "once",
         "learning_rate",
         "evidence_smoothing",
         "ridge",
         "max_delta",
-        "min_trusted_buckets",
+        "min_feature_impressions",
+        "max_feature_ci_width",
         "snapshot_name_prefix",
+        "baseline_update",
+        "baseline_max_ci_width",
         "dry_run",
     ):
         value = getattr(args, field_name)
@@ -214,15 +231,31 @@ def _result_lines(result: WeightUpdateResult) -> list[str]:
         f"redis bucket keys scanned: {result.metrics.input_bucket_count}",
         f"valid buckets parsed: {result.metrics.valid_bucket_count}",
         f"invalid buckets parsed: {result.metrics.invalid_bucket_count}",
-        f"trusted buckets used: {result.metrics.trusted_bucket_count}",
-        f"skipped/untrusted buckets: {result.metrics.skipped_bucket_count}",
+        f"ad feature buckets: {result.metrics.ad_feature_bucket_count}",
+        f"domain feature buckets: {result.metrics.domain_feature_bucket_count}",
+        f"context feature buckets: {result.metrics.context_feature_bucket_count}",
+        f"updated feature buckets: {result.metrics.updated_feature_bucket_count}",
+        f"skipped feature buckets: {result.metrics.skipped_feature_bucket_count}",
+        "insufficient impression feature buckets: "
+        f"{result.metrics.insufficient_impression_feature_count}",
+        f"wide ci feature buckets: {result.metrics.wide_ci_feature_count}",
         f"unknown feature values initialized: {result.metrics.unknown_feature_count}",
         f"w0 unchanged: {result.metrics.w0_unchanged}",
+        f"baseline update enabled: {result.metrics.baseline_update_enabled}",
+        f"baseline update applied: {result.metrics.baseline_update_applied}",
+        f"old w0: {result.metrics.old_w0:.6f}",
+        f"new w0: {result.metrics.new_w0:.6f}",
+        f"baseline delta: {result.metrics.baseline_delta:.6f}",
+        f"aggregate impressions/clicks: "
+        f"{result.metrics.aggregate_impressions}/{result.metrics.aggregate_clicks}",
+        f"baseline ci width: {result.metrics.baseline_ci_width:.6f}",
+        f"baseline guard reason: {result.metrics.baseline_guard_reason}",
         f"max absolute weight delta: {result.metrics.max_absolute_weight_delta:.6f}",
         f"redis write status: {result.redis_write_applied}",
         f"postgres snapshot status: {result.postgres_write_applied}",
         f"snapshot name: {result.snapshot_name or 'not generated'}",
-        f"snapshot id: {result.postgres_snapshot_id if result.postgres_snapshot_id is not None else 'n/a'}",
+        "snapshot id: "
+        f"{result.postgres_snapshot_id if result.postgres_snapshot_id is not None else 'n/a'}",
         f"skipped reason: {result.skipped_reason or 'none'}",
     ]
 
@@ -242,23 +275,6 @@ def _print_result_summary(
             *(extra_lines or []),
             f"config: {config_path}",
         ],
-    )
-
-
-def _log_result(result: WeightUpdateResult) -> None:
-    """Log the required Task 2 run summary after each recalibration pass."""
-
-    logger.info(
-        f"Weight update summary: scanned={result.metrics.input_bucket_count}, "
-        f"valid={result.metrics.valid_bucket_count}, invalid={result.metrics.invalid_bucket_count}, "
-        f"trusted={result.metrics.trusted_bucket_count}, skipped={result.metrics.skipped_bucket_count}, "
-        f"unknown_features={result.metrics.unknown_feature_count}, "
-        f"w0_unchanged={result.metrics.w0_unchanged}, "
-        f"max_delta={result.metrics.max_absolute_weight_delta:.6f}, "
-        f"redis_write={result.redis_write_applied}, "
-        f"postgres_write={result.postgres_write_applied}, "
-        f"snapshot_name={result.snapshot_name or 'not_generated'}, "
-        f"snapshot_id={result.postgres_snapshot_id if result.postgres_snapshot_id is not None else 'n/a'}"
     )
 
 

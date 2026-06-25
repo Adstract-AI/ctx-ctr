@@ -28,7 +28,7 @@ The job should:
 
 - read current bucket statistics from Redis `ctr:*` keys
 - read the current model from Redis `weights:current`
-- learn from trusted buckets only
+- aggregate triplet CTR buckets into single-feature buckets
 - update feature-family weights without changing `w0`
 - re-center each weight family
 - write updated weights back to Redis
@@ -57,7 +57,7 @@ Expected model shape:
   },
   "metrics": {
     "baseline_ctr": 0.02,
-    "prior_strength": 100.0
+    "triplet_prior_strength": 100.0
   }
 }
 ```
@@ -71,58 +71,32 @@ ctr:*
 Expected bucket payload shape is the same as
 `SeedBucketStatistic.redis_payload()`.
 
-Use only buckets where:
-
-```text
-trusted == true
-```
-
-Buckets that are not trusted are counted as skipped and do not move weights.
+The triplet `trusted` flag is not used for feature-weight learning. The job
+derives single-feature buckets for ad category, publisher domain, and
+conversation category by summing valid triplet impressions/clicks.
 
 ## Weight Update Rules
 
-For each trusted bucket:
-
-1. Clip the bucket CTR into a safe logit range before calling `logit`.
-2. Compute:
-
-   ```text
-   z_target = logit(clipped_ctr)
-   ```
-
-3. For each feature family, compute a residual target by subtracting `w0` and
-   the other two current family weights.
-
-For ad category:
+For each single-feature bucket:
 
 ```text
-target_w_ad = z_target - w0 - w_dom[publisher_domain] - w_ctx[conversation_category]
-```
-
-For publisher domain:
-
-```text
-target_w_dom = z_target - w0 - w_ad[ad_category] - w_ctx[conversation_category]
-```
-
-For conversation category:
-
-```text
-target_w_ctx = z_target - w0 - w_ad[ad_category] - w_dom[publisher_domain]
-```
-
-Aggregate targets per family value using bucket impressions as the evidence
-weight.
-
-For each family value:
-
-```text
+m0 = sigmoid(w0 + current_weight)
+alpha0 = m0 * prior_strength
+beta0 = (1 - m0) * prior_strength
+alpha_post = alpha0 + clicks
+beta_post = beta0 + impressions - clicks
+posterior_ctr = alpha_post / (alpha_post + beta_post)
+z_target = logit(posterior_ctr)
+delta_star = z_target - w0
 eta = learning_rate * impressions / (impressions + evidence_smoothing)
-raw_delta = eta * (target - current_weight)
+raw_delta = eta * (delta_star - current_weight)
 regularized_delta = raw_delta - ridge * current_weight
 delta = clip(regularized_delta, -max_delta, max_delta)
 new_weight = current_weight + delta
 ```
+
+Only update single-feature buckets that pass minimum-impression and CI-width
+guards.
 
 After every family is updated, re-center each family independently:
 
@@ -150,7 +124,7 @@ Redis:
 
 - overwrite `weights:current` with the updated model payload
 - keep `w0` exactly unchanged
-- keep the existing `metrics.baseline_ctr` and `metrics.prior_strength`
+- keep existing model metric prior strengths
 - update `snapshot_name` with the new generated snapshot name
 
 PostgreSQL:

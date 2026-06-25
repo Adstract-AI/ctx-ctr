@@ -1,10 +1,8 @@
-redis_url: redis://localhost:6379/0
 pattern: "*"
 limit: 200
 watch: false
 interval_seconds: 2.0
 pretty_json: true
-only_bucket: false
 ad_category: null
 publisher_domain: null
 conversation_category: null

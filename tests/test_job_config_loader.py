@@ -8,6 +8,7 @@ from ctx_ctr.job_config_loader import JobConfigError, load_job_config, merge_job
 from ctx_ctr.models.job_configs import (
     CleanTopicsJobConfig,
     ProduceEventsJobConfig,
+    PersistRedisBucketsJobConfig,
     ResetValuesJobConfig,
     RunWeightUpdateJobConfig,
     RunRealtimeCtrJobConfig,
@@ -26,7 +27,6 @@ def test_load_job_config_validates_yaml_into_pydantic_model(tmp_path: Path) -> N
                 "log_every: 5",
                 "also_unified: true",
                 "dry_run: true",
-                "bootstrap_servers: localhost:9092",
                 "impression_topic: ctr.impressions",
                 "click_topic: ctr.clicks",
                 "event_topic: ctr.events",
@@ -91,6 +91,7 @@ def test_default_job_configs_are_valid() -> None:
         ("configs/seed_values.yaml", SeedValuesJobConfig),
         ("configs/reset_values.yaml", ResetValuesJobConfig),
         ("configs/clean_topics.yaml", CleanTopicsJobConfig),
+        ("configs/persist_redis_buckets.yaml", PersistRedisBucketsJobConfig),
         ("configs/produce_events.yaml", ProduceEventsJobConfig),
         ("configs/run_realtime_ctr.yaml", RunRealtimeCtrJobConfig),
         ("configs/run_weight_update.yaml", RunWeightUpdateJobConfig),

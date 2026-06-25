@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 
 [project.scripts]
 clean-topics = "ctx_ctr.jobs.clean_topics:main"
+persist-redis-buckets = "ctx_ctr.jobs.persist_redis_buckets:main"
 produce-events = "ctx_ctr.jobs.produce_events:main"
 reset-values = "ctx_ctr.jobs.reset_values:main"
 realtime-ctr = "ctx_ctr.jobs.run_realtime_ctr:main"

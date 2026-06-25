@@ -11,14 +11,14 @@ from psycopg.types.json import Jsonb
 
 from ctx_ctr.exceptions import WeightUpdateError
 from ctx_ctr.logging_config import get_logger
-from ctx_ctr.models.seed import SeedModelSnapshot
+from ctx_ctr.models.seed import SeedBucketStatistic, SeedModelSnapshot
 from ctx_ctr.models.weight_update import WeightUpdateRunMetrics
 
 logger = get_logger(__name__)
 
 
 class PostgresRuntimeAdapter:
-    """Insert Task 2 model snapshots into PostgreSQL."""
+    """Persist runtime model snapshots and bucket statistics into PostgreSQL."""
 
     def __init__(self, dsn: str) -> None:
         self._dsn = dsn
@@ -84,6 +84,75 @@ class PostgresRuntimeAdapter:
             f"Inserted PostgreSQL model snapshot {snapshot.snapshot_name} with id {snapshot_id}"
         )
         return snapshot_id
+
+    def upsert_bucket_statistics(self, buckets: list[SeedBucketStatistic]) -> None:
+        """Insert or replace runtime CTR bucket statistics."""
+
+        if not buckets:
+            return
+        connection = self._require_connection()
+        try:
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    """
+                    INSERT INTO ctr_bucket_statistics (
+                        ad_category,
+                        publisher_domain,
+                        conversation_category,
+                        impressions,
+                        clicks,
+                        alpha_prior,
+                        beta_prior,
+                        alpha_posterior,
+                        beta_posterior,
+                        ctr,
+                        variance,
+                        ci_low,
+                        ci_high,
+                        trusted
+                    )
+                    VALUES (
+                        %(ad_category)s,
+                        %(publisher_domain)s,
+                        %(conversation_category)s,
+                        %(impressions)s,
+                        %(clicks)s,
+                        %(alpha_prior)s,
+                        %(beta_prior)s,
+                        %(alpha_posterior)s,
+                        %(beta_posterior)s,
+                        %(ctr)s,
+                        %(variance)s,
+                        %(ci_low)s,
+                        %(ci_high)s,
+                        %(trusted)s
+                    )
+                    ON CONFLICT (
+                        ad_category,
+                        publisher_domain,
+                        conversation_category
+                    )
+                    DO UPDATE SET
+                        impressions = EXCLUDED.impressions,
+                        clicks = EXCLUDED.clicks,
+                        alpha_prior = EXCLUDED.alpha_prior,
+                        beta_prior = EXCLUDED.beta_prior,
+                        alpha_posterior = EXCLUDED.alpha_posterior,
+                        beta_posterior = EXCLUDED.beta_posterior,
+                        ctr = EXCLUDED.ctr,
+                        variance = EXCLUDED.variance,
+                        ci_low = EXCLUDED.ci_low,
+                        ci_high = EXCLUDED.ci_high,
+                        trusted = EXCLUDED.trusted,
+                        updated_at = NOW()
+                    """,
+                    [bucket.model_dump() for bucket in buckets],
+                )
+            connection.commit()
+            logger.debug(f"Persisted {len(buckets)} PostgreSQL bucket statistics")
+        except psycopg.Error as error:
+            connection.rollback()
+            raise WeightUpdateError("Failed to persist PostgreSQL bucket statistics") from error
 
     def _require_connection(self) -> psycopg.Connection[tuple[Any, ...]]:
         if self._connection is None:

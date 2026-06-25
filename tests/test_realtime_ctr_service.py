@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from ctx_ctr.models.ctr_state import CtrBucketKey, CtrModelMetrics, CtrModelSnapshot, CtrModelWeights
 from ctx_ctr.models.events import CtrEvent
-from ctx_ctr.services.realtime_ctr import RealtimeCtrUpdateService
+from ctx_ctr.services.realtime_ctr import CtrTrustThresholds, RealtimeCtrUpdateService
 
 
 def test_initialize_bucket_uses_current_model_prior_strength() -> None:
@@ -68,6 +68,23 @@ def test_click_after_impression_updates_click_count() -> None:
     assert click_result.bucket.clicks == 1
 
 
+def test_trusted_flag_uses_configured_thresholds() -> None:
+    service = RealtimeCtrUpdateService(
+        build_model(),
+        CtrTrustThresholds(
+            z_score=1.96,
+            min_impressions=1,
+            max_variance=1.0,
+            max_ci_width=1.0,
+        ),
+    )
+
+    result = service.apply_event(build_event(event_type="impression"), None)
+
+    assert result.bucket is not None
+    assert result.bucket.trusted is True
+
+
 def build_model() -> CtrModelSnapshot:
     return CtrModelSnapshot(
         snapshot_name="seed_values_v1",
@@ -77,7 +94,12 @@ def build_model() -> CtrModelSnapshot:
             w_dom={"news.example": 0.05},
             w_ctx={"personal_finance": 0.16},
         ),
-        metrics=CtrModelMetrics(baseline_ctr=0.02, prior_strength=100.0),
+        metrics=CtrModelMetrics(
+            baseline_ctr=0.02,
+            global_prior_strength=500.0,
+            triplet_prior_strength=100.0,
+            family_prior_strengths={"ad": 200.0, "domain": 200.0, "context": 150.0},
+        ),
     )
 
 

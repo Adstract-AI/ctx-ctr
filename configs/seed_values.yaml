@@ -1,1 +1,7 @@
 dry_run: false
+baseline_prior_mean: 0.02
+triplet_prior_strength: 100.0
+global_prior_strength: 500.0
+ad_prior_strength: 200.0
+domain_prior_strength: 200.0
+context_prior_strength: 150.0

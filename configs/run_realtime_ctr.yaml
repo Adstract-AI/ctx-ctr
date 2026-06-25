@@ -1,10 +1,12 @@
 impression_topic: ctr.impressions
 click_topic: ctr.clicks
 dead_letter_topic: ctr.dead-letter
-bootstrap_servers: localhost:9092
-redis_url: redis://localhost:6379/0
 consumer_group: ctx-ctr-flink-realtime
 parallelism: 1
 checkpoint_interval_ms: 10000
 kafka_connector_jar: jars/flink-sql-connector-kafka-3.2.0-1.19.jar
-log_every: 1
+log_every: 10
+trust_z_score: 1.96
+trust_min_impressions: 100
+trust_max_variance: 0.0005
+trust_max_ci_width: 0.05

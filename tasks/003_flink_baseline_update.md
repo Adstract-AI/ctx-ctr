@@ -42,7 +42,8 @@ ctr:*
 
 For feature-family updates, keep Task 002 behavior:
 
-- use trusted buckets only
+- aggregate triplet buckets into single-feature buckets
+- use single-feature minimum-impression and CI-width guards
 - update `w_ad`, `w_dom`, and `w_ctx`
 - re-center each family
 
@@ -69,7 +70,7 @@ global_clicks = sum(bucket.clicks)
 Use the current model metrics:
 
 ```text
-prior_strength = weights:current.metrics.prior_strength
+prior_strength = weights:current.metrics.global_prior_strength
 old_baseline_ctr = sigmoid(old_w0)
 ```
 
@@ -87,14 +88,13 @@ Compute uncertainty:
 
 ```text
 variance = beta_variance(alpha_posterior, beta_posterior)
-ci_low, ci_high = clipped_confidence_interval(posterior_ctr, variance, 1.96)
+ci_low, ci_high = clipped_confidence_interval(posterior_ctr, variance, 1.645)
 ci_width = ci_high - ci_low
 ```
 
 Baseline guards:
 
 ```text
-global_impressions >= baseline_min_impressions
 ci_width <= baseline_max_ci_width
 ```
 
@@ -108,13 +108,8 @@ If guards fail:
 If guards pass:
 
 ```text
-target_w0 = logit(clipped_posterior_ctr)
-eta = baseline_learning_rate * global_impressions / (
-    global_impressions + baseline_evidence_smoothing
-)
-raw_delta = eta * (target_w0 - old_w0)
-delta = clip(raw_delta, -baseline_max_delta, baseline_max_delta)
-new_w0 = old_w0 + delta
+new_w0 = logit(clipped_posterior_ctr)
+delta = new_w0 - old_w0
 ```
 
 Use a safe logit clip before calling `logit`.
@@ -141,7 +136,9 @@ metrics.baseline_ctr = sigmoid(new_w0)
 Keep:
 
 ```text
-metrics.prior_strength
+metrics.triplet_prior_strength
+metrics.global_prior_strength
+metrics.family_prior_strengths
 ```
 
 from the previous model.

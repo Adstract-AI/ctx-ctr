@@ -59,11 +59,24 @@ def main() -> None:
         default=None,
         help="validate and print planned seed counts only",
     )
+    parser.add_argument("--baseline-prior-mean", type=float, default=None)
+    parser.add_argument("--triplet-prior-strength", type=float, default=None)
+    parser.add_argument("--global-prior-strength", type=float, default=None)
+    parser.add_argument("--ad-prior-strength", type=float, default=None)
+    parser.add_argument("--domain-prior-strength", type=float, default=None)
+    parser.add_argument("--context-prior-strength", type=float, default=None)
     args = parser.parse_args()
     file_config = load_job_config(args.config, SeedValuesJobConfig)
     config = merge_job_config(file_config, _cli_overrides(args))
 
-    dataset = build_seed_values_dataset()
+    dataset = build_seed_values_dataset(
+        baseline_prior_mean=config.baseline_prior_mean,
+        triplet_prior_strength=config.triplet_prior_strength,
+        global_prior_strength=config.global_prior_strength,
+        ad_prior_strength=config.ad_prior_strength,
+        domain_prior_strength=config.domain_prior_strength,
+        context_prior_strength=config.context_prior_strength,
+    )
     configure_logging(LOG_LEVEL, LOG_COLOR)
     logger.info(
         f"Prepared seed values dataset: {dataset.summary()['bucket_statistics']} buckets, "
@@ -120,8 +133,18 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
     """Return CLI values explicitly overriding the YAML config."""
 
     overrides: dict[str, object] = {}
-    if args.dry_run is not None:
-        overrides["dry_run"] = args.dry_run
+    for field_name in (
+        "dry_run",
+        "baseline_prior_mean",
+        "triplet_prior_strength",
+        "global_prior_strength",
+        "ad_prior_strength",
+        "domain_prior_strength",
+        "context_prior_strength",
+    ):
+        value = getattr(args, field_name)
+        if value is not None:
+            overrides[field_name] = value
     return overrides
 
 
