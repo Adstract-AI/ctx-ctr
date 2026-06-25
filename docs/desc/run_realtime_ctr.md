@@ -72,6 +72,13 @@ python -m ctx_ctr.jobs.seed_values
   Defaults to the project `jars/` folder through the YAML config.
 - `--log-every <int>`: Log progress every N valid events. Use `0` to disable
   progress logs.
+- `--trust-z-score <float>`: Z-score used for bucket confidence intervals.
+- `--trust-min-impressions <int>`: Minimum bucket impressions required for the
+  bucket `trusted` flag.
+- `--trust-max-variance <float>`: Maximum bucket posterior variance allowed for
+  the bucket `trusted` flag.
+- `--trust-max-ci-width <float>`: Maximum confidence-interval width allowed for
+  the bucket `trusted` flag.
 
 CLI flags override values from the YAML config.
 
@@ -87,6 +94,12 @@ CLI flags override values from the YAML config.
   are resolved from the project root. Defaults to
   `jars/flink-sql-connector-kafka-3.2.0-1.19.jar`.
 - `log_every`: Progress logging interval.
+- `trust_z_score`: Z-score used for bucket confidence intervals.
+- `trust_min_impressions`: Minimum bucket impressions required for `trusted`.
+- `trust_max_variance`: Maximum bucket posterior variance allowed for
+  `trusted`.
+- `trust_max_ci_width`: Maximum bucket confidence-interval width allowed for
+  `trusted`.
 
 ## Kafka Input
 
@@ -152,6 +165,9 @@ The job:
 6. Applies the Bayesian CTR update.
 7. Writes accepted bucket updates to Redis.
 8. Emits invalid events to the dead-letter Kafka topic.
+
+The trust guardrails only control the bucket `trusted` flag. They do not reject
+valid impression/click events and do not block Redis writes.
 
 ## Notes
 

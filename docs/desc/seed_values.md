@@ -60,6 +60,14 @@ This produces 100 bucket combinations.
 - `--domain-prior-strength`: Override publisher-domain family prior strength.
 - `--context-prior-strength`: Override conversation-context family prior
   strength.
+- `--trust-z-score`: Override the z-score used for seeded bucket confidence
+  intervals.
+- `--trust-min-impressions`: Override the minimum impressions required for a
+  seeded bucket to be marked trusted.
+- `--trust-max-variance`: Override the maximum posterior variance allowed for a
+  seeded bucket to be marked trusted.
+- `--trust-max-ci-width`: Override the maximum confidence-interval width
+  allowed for a seeded bucket to be marked trusted.
 
 CLI flags override values from the YAML config.
 
@@ -74,7 +82,6 @@ CLI flags override values from the YAML config.
   buckets.
 - `context_prior_strength`: Prior strength for conversation-context
   single-feature buckets.
-
 ## How It Works
 
 The job builds a deterministic seed dataset in Python using Pydantic models.

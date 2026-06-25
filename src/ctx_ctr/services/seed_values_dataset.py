@@ -12,6 +12,12 @@ from ctx_ctr.models.seed import (
     SeedRunSummary,
     SeedWeights,
 )
+from ctx_ctr.constants import (
+    DEFAULT_CTR_TRUST_MAX_CI_WIDTH,
+    DEFAULT_CTR_TRUST_MAX_VARIANCE,
+    DEFAULT_CTR_TRUST_MIN_IMPRESSIONS,
+    DEFAULT_CTR_TRUST_Z_SCORE,
+)
 from ctx_ctr.services.ctr_math import beta_variance, clipped_confidence_interval, logit, sigmoid
 
 AD_CATEGORIES = ["finance", "travel", "education", "health", "gaming"]
@@ -30,10 +36,6 @@ GLOBAL_PRIOR_STRENGTH = 500.0
 AD_PRIOR_STRENGTH = 200.0
 DOMAIN_PRIOR_STRENGTH = 200.0
 CONTEXT_PRIOR_STRENGTH = 150.0
-Z_SCORE_95 = 1.96
-TRUSTED_MIN_IMPRESSIONS = 100
-TRUSTED_MAX_VARIANCE = 0.0005
-TRUSTED_MAX_CI_WIDTH = 0.05
 SEED_GENERATED_AT = datetime(2026, 1, 1, tzinfo=UTC)
 
 AD_WEIGHTS = {
@@ -155,11 +157,15 @@ def _build_bucket_statistic(
     beta_posterior = beta_prior + impressions - clicks
     ctr = alpha_posterior / (alpha_posterior + beta_posterior)
     variance = beta_variance(alpha_posterior, beta_posterior)
-    ci_low, ci_high = clipped_confidence_interval(ctr, variance, Z_SCORE_95)
+    ci_low, ci_high = clipped_confidence_interval(
+        ctr,
+        variance,
+        DEFAULT_CTR_TRUST_Z_SCORE,
+    )
     trusted = (
-        impressions >= TRUSTED_MIN_IMPRESSIONS
-        and variance <= TRUSTED_MAX_VARIANCE
-        and (ci_high - ci_low) <= TRUSTED_MAX_CI_WIDTH
+        impressions >= DEFAULT_CTR_TRUST_MIN_IMPRESSIONS
+        and variance <= DEFAULT_CTR_TRUST_MAX_VARIANCE
+        and (ci_high - ci_low) <= DEFAULT_CTR_TRUST_MAX_CI_WIDTH
     )
     return SeedBucketStatistic(
         ad_category=ad_category,

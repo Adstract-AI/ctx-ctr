@@ -21,7 +21,11 @@ from ctx_ctr.logging_config import configure_logging, get_logger
 from ctx_ctr.models.ctr_state import CtrBucketStatistic, DeadLetterPayload
 from ctx_ctr.models.events import CtrEvent
 from ctx_ctr.models.job_configs import RunRealtimeCtrJobConfig
-from ctx_ctr.services.realtime_ctr import RealtimeCtrUpdateService, event_bucket_key
+from ctx_ctr.services.realtime_ctr import (
+    CtrTrustThresholds,
+    RealtimeCtrUpdateService,
+    event_bucket_key,
+)
 
 logger = get_logger("ctx_ctr.jobs.run_realtime_ctr")
 
@@ -54,6 +58,10 @@ def main() -> None:
         default=None,
         help="log progress every N valid events; use 0 to disable progress logs",
     )
+    parser.add_argument("--trust-z-score", type=float, default=None)
+    parser.add_argument("--trust-min-impressions", type=int, default=None)
+    parser.add_argument("--trust-max-variance", type=float, default=None)
+    parser.add_argument("--trust-max-ci-width", type=float, default=None)
     args = parser.parse_args()
     file_config = load_job_config(args.config, RunRealtimeCtrJobConfig)
     config = merge_job_config(file_config, _cli_overrides(args))
@@ -64,6 +72,9 @@ def main() -> None:
         f"impression_topic={config.impression_topic}, click_topic={config.click_topic}, "
         f"dead_letter_topic={config.dead_letter_topic}, consumer_group={config.consumer_group}, "
         f"parallelism={config.parallelism}, checkpoint_interval_ms={config.checkpoint_interval_ms}, "
+        f"trust_min_impressions={config.trust_min_impressions}, "
+        f"trust_max_variance={config.trust_max_variance}, "
+        f"trust_max_ci_width={config.trust_max_ci_width}, "
         f"config={args.config}"
     )
 
@@ -106,6 +117,12 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
         def __init__(self, redis_url: str, log_every: int) -> None:
             self._redis_url = redis_url
             self._log_every = log_every
+            self._trust_thresholds = CtrTrustThresholds(
+                z_score=config.trust_z_score,
+                min_impressions=config.trust_min_impressions,
+                max_variance=config.trust_max_variance,
+                max_ci_width=config.trust_max_ci_width,
+            )
             self._adapter: RedisCtrStateAdapter | None = None
             self._service: RealtimeCtrUpdateService | None = None
             self._bucket_state: Any | None = None
@@ -117,7 +134,7 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
 
             self._adapter = RedisCtrStateAdapter(self._redis_url)
             model = self._adapter.read_current_model()
-            self._service = RealtimeCtrUpdateService(model)
+            self._service = RealtimeCtrUpdateService(model, self._trust_thresholds)
             self._bucket_state = runtime_context.get_state(
                 ValueStateDescriptor("bucket_state", Types.STRING())
             )
@@ -263,6 +280,10 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
         "checkpoint_interval_ms",
         "kafka_connector_jar",
         "log_every",
+        "trust_z_score",
+        "trust_min_impressions",
+        "trust_max_variance",
+        "trust_max_ci_width",
     ):
         value = getattr(args, field_name)
         if value is not None:

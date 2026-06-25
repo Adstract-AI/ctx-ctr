@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ctx_ctr.constants import DEFAULT_FLINK_KAFKA_CONNECTOR_JAR
+from ctx_ctr.constants import (
+    DEFAULT_CTR_TRUST_MAX_CI_WIDTH,
+    DEFAULT_CTR_TRUST_MAX_VARIANCE,
+    DEFAULT_CTR_TRUST_MIN_IMPRESSIONS,
+    DEFAULT_CTR_TRUST_Z_SCORE,
+    DEFAULT_FLINK_KAFKA_CONNECTOR_JAR,
+)
 from ctx_ctr.env_variables import (
     CLICK_TOPIC,
     DEAD_LETTER_TOPIC,
@@ -93,6 +99,10 @@ class RunRealtimeCtrJobConfig(BaseModel):
     checkpoint_interval_ms: int = Field(default=10000, ge=0)
     kafka_connector_jar: str = DEFAULT_FLINK_KAFKA_CONNECTOR_JAR
     log_every: int = Field(default=100, ge=0)
+    trust_z_score: float = Field(default=DEFAULT_CTR_TRUST_Z_SCORE, gt=0)
+    trust_min_impressions: int = Field(default=DEFAULT_CTR_TRUST_MIN_IMPRESSIONS, ge=0)
+    trust_max_variance: float = Field(default=DEFAULT_CTR_TRUST_MAX_VARIANCE, gt=0)
+    trust_max_ci_width: float = Field(default=DEFAULT_CTR_TRUST_MAX_CI_WIDTH, gt=0, le=1)
 
     model_config = ConfigDict(frozen=True)
 

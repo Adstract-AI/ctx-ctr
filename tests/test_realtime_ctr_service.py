@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from ctx_ctr.models.ctr_state import CtrBucketKey, CtrModelMetrics, CtrModelSnapshot, CtrModelWeights
 from ctx_ctr.models.events import CtrEvent
-from ctx_ctr.services.realtime_ctr import RealtimeCtrUpdateService
+from ctx_ctr.services.realtime_ctr import CtrTrustThresholds, RealtimeCtrUpdateService
 
 
 def test_initialize_bucket_uses_current_model_prior_strength() -> None:
@@ -66,6 +66,23 @@ def test_click_after_impression_updates_click_count() -> None:
     assert click_result.bucket is not None
     assert click_result.bucket.impressions == 1
     assert click_result.bucket.clicks == 1
+
+
+def test_trusted_flag_uses_configured_thresholds() -> None:
+    service = RealtimeCtrUpdateService(
+        build_model(),
+        CtrTrustThresholds(
+            z_score=1.96,
+            min_impressions=1,
+            max_variance=1.0,
+            max_ci_width=1.0,
+        ),
+    )
+
+    result = service.apply_event(build_event(event_type="impression"), None)
+
+    assert result.bucket is not None
+    assert result.bucket.trusted is True
 
 
 def build_model() -> CtrModelSnapshot:
