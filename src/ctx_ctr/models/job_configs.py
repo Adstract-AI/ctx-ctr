@@ -145,6 +145,16 @@ class RunWeightUpdateJobConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class PersistRedisBucketsJobConfig(BaseModel):
+    """Configuration for Redis-to-Postgres bucket persistence."""
+
+    redis_url: str = REDIS_URL
+    postgres_dsn: str = POSTGRES_DSN
+    dry_run: bool = False
+
+    model_config = ConfigDict(frozen=True)
+
+
 class WatchRedisValuesJobConfig(BaseModel):
     """Configuration for the Redis value inspection job."""
 
