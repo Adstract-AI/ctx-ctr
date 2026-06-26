@@ -21,6 +21,12 @@ traffic batch, waits briefly for the realtime processors to catch up, scans Redi
 CTR bucket state, reads Postgres row counts, writes local JSON/Markdown artifacts,
 and inserts one row into `ctr_experiment_results`.
 
+The first full-system experiment is `full_system_local`. It resets seed-owned
+Redis/Postgres state, cleans CTR Kafka topics, seeds deterministic values, starts
+`realtime-ctr` and `streaming-weight-update` as child processes, produces phased
+traffic, verifies strict success gates, captures processor logs, writes artifacts,
+and inserts one row into `ctr_experiment_results`.
+
 ## When To Use It
 
 Use this when you want a repeatable run that answers:
@@ -32,7 +38,10 @@ Use this when you want a repeatable run that answers:
 
 The job does not start or stop Flink jobs. Start `realtime-ctr` or
 `streaming-weight-update` separately when the experiment should measure those
-processors.
+processors for lightweight experiments like `local_smoke`.
+
+For `full_system_local`, the job does start and stop the local processor
+subprocesses itself.
 
 ## Default Config
 
@@ -58,6 +67,12 @@ Experiment artifacts:
 
 ```bash
 experiments/results/
+```
+
+Full-system experiment definition:
+
+```bash
+experiments/configs/full_system_local.yaml
 ```
 
 ## Flags
@@ -86,8 +101,10 @@ Writes:
 - Kafka impression/click topics when not in dry-run mode
 - local JSON/Markdown artifacts under `experiments/results/`
 - Postgres `ctr_experiment_results` when not in dry-run mode
+- processor log files under the experiment artifact directory
 
-It does not reset Redis, Postgres, or Kafka.
+`full_system_local` is intentionally destructive for local CTR state: it cleans
+CTR Kafka topics and resets seed-owned Redis/Postgres values before seeding.
 
 ## Examples
 
@@ -105,6 +122,12 @@ realtime-ctr
 run-experiment
 ```
 
+Run the full-system local experiment:
+
+```bash
+run-experiment --experiment full_system_local
+```
+
 Use another experiment definition:
 
 ```bash
@@ -120,4 +143,9 @@ The terminal prints a final boxed summary with:
 - Redis impression/click deltas
 - Postgres model snapshot delta
 - Postgres experiment row id
+- success gate status and failures
 - local artifact path
+
+For `full_system_local`, success gates fail the command after artifacts and the
+Postgres experiment result are written. Check the artifact directory for
+`result.json`, `result.md`, and processor logs.

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 JsonValue: TypeAlias = Any
 JsonObject: TypeAlias = dict[str, JsonValue]
@@ -20,6 +20,65 @@ class ExperimentTrafficConfig(BaseModel):
     random_seed: int = 42
     log_every: int = Field(default=100, ge=0)
     also_unified: bool = False
+    phases: list["ExperimentTrafficPhase"] = Field(default_factory=list)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ExperimentTrafficPhase(BaseModel):
+    """One traffic phase inside a full-system experiment."""
+
+    phase_name: str = Field(min_length=1)
+    impressions: int = Field(gt=0)
+    events_per_second: float = Field(ge=0)
+    random_seed: int
+    settle_seconds: float = Field(default=5.0, ge=0)
+    log_every: int = Field(default=100, ge=0)
+    also_unified: bool = False
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ExperimentSetupConfig(BaseModel):
+    """Destructive setup actions to run before an experiment."""
+
+    reset_values: bool = False
+    clean_topics: bool = False
+    seed_values: bool = False
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ExperimentProcessorConfig(BaseModel):
+    """Runtime settings for one processor started by an experiment."""
+
+    enabled: bool = False
+    command: list[str] = Field(default_factory=list)
+    startup_seconds: float = Field(default=8.0, ge=0)
+    stop_timeout_seconds: float = Field(default=15.0, gt=0)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ExperimentProcessorsConfig(BaseModel):
+    """Processor jobs controlled by a full-system experiment."""
+
+    realtime_ctr: ExperimentProcessorConfig = Field(default_factory=ExperimentProcessorConfig)
+    streaming_weight_update: ExperimentProcessorConfig = Field(
+        default_factory=ExperimentProcessorConfig
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ExperimentSuccessGates(BaseModel):
+    """Strict acceptance checks for full-system experiment runs."""
+
+    require_processor_health: bool = False
+    require_redis_impression_delta_match: bool = False
+    require_redis_click_delta_match: bool = False
+    require_model_snapshot_created: bool = False
+    max_invalid_redis_buckets: int = Field(default=0, ge=0)
 
     model_config = ConfigDict(frozen=True)
 
@@ -30,10 +89,25 @@ class ExperimentDefinition(BaseModel):
     experiment_name: str = Field(min_length=1)
     description: str = ""
     settle_seconds: float = Field(default=5.0, ge=0)
+    setup: ExperimentSetupConfig = Field(default_factory=ExperimentSetupConfig)
+    processors: ExperimentProcessorsConfig = Field(default_factory=ExperimentProcessorsConfig)
     traffic: ExperimentTrafficConfig = Field(default_factory=ExperimentTrafficConfig)
+    success_gates: ExperimentSuccessGates = Field(default_factory=ExperimentSuccessGates)
     tags: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(frozen=True)
+
+    @model_validator(mode="after")
+    def validate_processor_commands(self) -> "ExperimentDefinition":
+        """Ensure enabled processors have explicit commands."""
+
+        enabled_processors = (
+            self.processors.realtime_ctr,
+            self.processors.streaming_weight_update,
+        )
+        if any(processor.enabled and not processor.command for processor in enabled_processors):
+            raise ValueError("enabled experiment processors must define a command")
+        return self
 
 
 class ExperimentRuntimeSnapshot(BaseModel):

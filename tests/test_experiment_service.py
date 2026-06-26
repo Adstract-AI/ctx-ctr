@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ctx_ctr.models.experiment import ExperimentDefinition, ExperimentTrafficConfig, JsonObject
+from ctx_ctr.models.experiment import (
+    ExperimentDefinition,
+    ExperimentProcessorConfig,
+    ExperimentProcessorsConfig,
+    ExperimentSetupConfig,
+    ExperimentSuccessGates,
+    ExperimentTrafficConfig,
+    ExperimentTrafficPhase,
+    JsonObject,
+)
 from ctx_ctr.models.seed import SeedBucketStatistic, SeedModelMetrics, SeedModelSnapshot, SeedWeights
 from ctx_ctr.models.weight_update import RedisBucketScanResult
 from ctx_ctr.services.experiment_service import ExperimentArtifactWriter, ExperimentService
@@ -91,6 +100,97 @@ class FakePublisher:
         self.flushed = True
 
 
+class RecordingSetupRunner:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def clean_topics(self) -> None:
+        self.calls.append("clean_topics")
+
+    def reset_values(self) -> None:
+        self.calls.append("reset_values")
+
+    def seed_values(self) -> None:
+        self.calls.append("seed_values")
+
+
+class RecordingProcessorManager:
+    def __init__(self, *, fail_health_check: bool = False) -> None:
+        self.fail_health_check = fail_health_check
+        self.started = False
+        self.stopped = False
+        self.health_checks = 0
+
+    def start_processors(self, definition: ExperimentDefinition, *, run_dir: Path) -> JsonObject:
+        self.started = True
+        return {
+            "realtime_ctr": {
+                "command": ["realtime-ctr"],
+                "log_path": str(run_dir / "processors" / "realtime_ctr.log"),
+                "early_exit": False,
+            }
+        }
+
+    def assert_healthy(self) -> None:
+        self.health_checks += 1
+        if self.fail_health_check:
+            from ctx_ctr.services.experiment_service import ExperimentFailure
+
+            raise ExperimentFailure("processor_realtime_ctr_exited_early_with_code_1")
+
+    def stop_processors(self) -> JsonObject:
+        self.stopped = True
+        return {"realtime_ctr": {"exit_code": 0, "forced": False}}
+
+
+class SequenceRedisReader(FakeRedisReader):
+    def __init__(self, impressions: list[int], clicks: list[int]) -> None:
+        self._impressions = impressions
+        self._clicks = clicks
+        self.scan_count = 0
+
+    def scan_bucket_statistics(self) -> RedisBucketScanResult:
+        index = min(self.scan_count, len(self._impressions) - 1)
+        self.scan_count += 1
+        impressions = self._impressions[index]
+        clicks = self._clicks[index]
+        return RedisBucketScanResult(
+            scanned_key_count=1,
+            valid_bucket_count=1,
+            invalid_bucket_count=0,
+            buckets=[
+                SeedBucketStatistic(
+                    ad_category="finance",
+                    publisher_domain="news.example",
+                    conversation_category="personal_finance",
+                    impressions=impressions,
+                    clicks=clicks,
+                    alpha_prior=2.0,
+                    beta_prior=98.0,
+                    alpha_posterior=2.0 + clicks,
+                    beta_posterior=98.0 + impressions - clicks,
+                    ctr=0.02,
+                    variance=0.0001,
+                    ci_low=0.01,
+                    ci_high=0.03,
+                    trusted=True,
+                )
+            ],
+        )
+
+
+class SequencePostgresStore(FakePostgresStore):
+    def __init__(self, model_counts: list[int]) -> None:
+        super().__init__()
+        self._model_counts = model_counts
+        self._model_count_calls = 0
+
+    def count_model_snapshots(self) -> int:
+        index = min(self._model_count_calls, len(self._model_counts) - 1)
+        self._model_count_calls += 1
+        return self._model_counts[index]
+
+
 def test_experiment_service_writes_artifacts_and_inserts_postgres_result(tmp_path: Path) -> None:
     redis_reader = FakeRedisReader()
     postgres_store = FakePostgresStore()
@@ -121,7 +221,7 @@ def test_experiment_service_writes_artifacts_and_inserts_postgres_result(tmp_pat
     assert postgres_store.inserted[0][0] == "unit_experiment"
     assert publisher.published == result.metrics["producer"]["total_events"]
     assert publisher.flushed is True
-    assert result.metrics["delta"]["redis_total_impressions"] == 1
+    assert result.metrics["delta"]["redis_total_impressions"] == 2
     assert result.metrics["before"]["current_model_snapshot_name"] == "current"
 
 
@@ -147,3 +247,179 @@ def test_experiment_service_dry_run_does_not_insert_postgres(tmp_path: Path) -> 
     assert Path(result.artifact_uri).exists()
     assert postgres_store.inserted == []
     assert result.metrics["producer"]["dry_run"] is True
+
+
+def test_full_experiment_runs_setup_processors_phases_and_strict_gates(
+    tmp_path: Path,
+) -> None:
+    setup_runner = RecordingSetupRunner()
+    processor_manager = RecordingProcessorManager()
+    redis_reader = SequenceRedisReader(
+        impressions=[100, 100, 105, 110, 110],
+        clicks=[2, 2, 3, 4, 4],
+    )
+    postgres_store = SequencePostgresStore(model_counts=[1, 1, 1, 2, 2])
+    service = ExperimentService(
+        redis_reader=redis_reader,
+        postgres_store=postgres_store,
+        artifact_writer=ExperimentArtifactWriter(str(tmp_path)),
+        publisher=FakePublisher(),
+        setup_runner=setup_runner,
+        processor_manager=processor_manager,
+    )
+    definition = _strict_definition(
+        phases=[
+            ExperimentTrafficPhase(
+                phase_name="warmup",
+                impressions=5,
+                events_per_second=0,
+                random_seed=1,
+                settle_seconds=0,
+                log_every=0,
+            ),
+            ExperimentTrafficPhase(
+                phase_name="steady",
+                impressions=5,
+                events_per_second=0,
+                random_seed=2,
+                settle_seconds=0,
+                log_every=0,
+            ),
+        ]
+    )
+
+    result = service.run(definition, dry_run=False)
+
+    assert setup_runner.calls == ["clean_topics", "reset_values", "seed_values"]
+    assert processor_manager.started is True
+    assert processor_manager.stopped is True
+    assert processor_manager.health_checks >= 1
+    assert len(result.metrics["traffic"]["phases"]) == 2
+    assert result.metrics["success_gates"]["passed"] is True
+    assert result.metrics["success_gates"]["redis_impression_delta"] == 10
+    assert result.metrics["success_gates"]["model_snapshot_delta"] == 1
+    assert postgres_store.inserted
+
+
+def test_full_experiment_records_failed_strict_gate_without_losing_artifact(
+    tmp_path: Path,
+) -> None:
+    postgres_store = SequencePostgresStore(model_counts=[1, 1, 1])
+    service = ExperimentService(
+        redis_reader=SequenceRedisReader(impressions=[100, 100, 101], clicks=[2, 2, 2]),
+        postgres_store=postgres_store,
+        artifact_writer=ExperimentArtifactWriter(str(tmp_path)),
+        publisher=FakePublisher(),
+        setup_runner=RecordingSetupRunner(),
+        processor_manager=RecordingProcessorManager(),
+    )
+    definition = _strict_definition(
+        phases=[
+            ExperimentTrafficPhase(
+                phase_name="warmup",
+                impressions=5,
+                events_per_second=0,
+                random_seed=1,
+                settle_seconds=0,
+                log_every=0,
+            )
+        ]
+    )
+
+    result = service.run(definition, dry_run=False)
+
+    assert result.metrics["success_gates"]["passed"] is False
+    assert "redis_impression_delta_mismatch" in result.metrics["success_gates"]["failures"]
+    assert "model_snapshot_not_created" in result.metrics["success_gates"]["failures"]
+    assert result.artifact_uri is not None
+    assert Path(result.artifact_uri).exists()
+    assert postgres_store.inserted
+
+
+def test_full_experiment_dry_run_skips_setup_processors_and_postgres_insert(
+    tmp_path: Path,
+) -> None:
+    setup_runner = RecordingSetupRunner()
+    processor_manager = RecordingProcessorManager()
+    postgres_store = SequencePostgresStore(model_counts=[1, 1])
+    service = ExperimentService(
+        redis_reader=SequenceRedisReader(impressions=[100, 100, 100], clicks=[2, 2, 2]),
+        postgres_store=postgres_store,
+        artifact_writer=ExperimentArtifactWriter(str(tmp_path)),
+        publisher=FakePublisher(),
+        setup_runner=setup_runner,
+        processor_manager=processor_manager,
+    )
+
+    result = service.run(_strict_definition(), dry_run=True)
+
+    assert setup_runner.calls == []
+    assert processor_manager.started is False
+    assert processor_manager.stopped is False
+    assert postgres_store.inserted == []
+    assert result.metrics["producer"]["dry_run"] is True
+
+
+def test_processor_early_exit_is_recorded_as_gate_failure(tmp_path: Path) -> None:
+    processor_manager = RecordingProcessorManager(fail_health_check=True)
+    service = ExperimentService(
+        redis_reader=SequenceRedisReader(impressions=[100, 100], clicks=[2, 2]),
+        postgres_store=SequencePostgresStore(model_counts=[1, 1]),
+        artifact_writer=ExperimentArtifactWriter(str(tmp_path)),
+        publisher=FakePublisher(),
+        setup_runner=RecordingSetupRunner(),
+        processor_manager=processor_manager,
+    )
+
+    result = service.run(_strict_definition(phases=[]), dry_run=False)
+
+    assert processor_manager.stopped is True
+    assert result.metrics["success_gates"]["passed"] is False
+    assert result.metrics["success_gates"]["failures"] == [
+        "processor_realtime_ctr_exited_early_with_code_1"
+    ]
+
+
+def _strict_definition(
+    *,
+    phases: list[ExperimentTrafficPhase] | None = None,
+) -> ExperimentDefinition:
+    return ExperimentDefinition(
+        experiment_name="full_unit",
+        settle_seconds=0,
+        setup=ExperimentSetupConfig(
+            reset_values=True,
+            clean_topics=True,
+            seed_values=True,
+        ),
+        processors=ExperimentProcessorsConfig(
+            realtime_ctr=ExperimentProcessorConfig(
+                enabled=True,
+                command=["realtime-ctr"],
+                startup_seconds=0,
+            )
+        ),
+        traffic=ExperimentTrafficConfig(
+            impressions=1,
+            events_per_second=0,
+            random_seed=42,
+            log_every=0,
+            phases=phases or [
+                ExperimentTrafficPhase(
+                    phase_name="default",
+                    impressions=1,
+                    events_per_second=0,
+                    random_seed=42,
+                    settle_seconds=0,
+                    log_every=0,
+                )
+            ],
+        ),
+        success_gates=ExperimentSuccessGates(
+            require_processor_health=True,
+            require_redis_impression_delta_match=True,
+            require_redis_click_delta_match=False,
+            require_model_snapshot_created=True,
+            max_invalid_redis_buckets=0,
+        ),
+    )

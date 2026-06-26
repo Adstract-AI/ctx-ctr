@@ -37,11 +37,15 @@ class FakeExperimentService:
         postgres_store: object,
         artifact_writer: object,
         publisher: object,
+        setup_runner: object | None = None,
+        processor_manager: object | None = None,
     ) -> None:
         self.redis_reader = redis_reader
         self.postgres_store = postgres_store
         self.artifact_writer = artifact_writer
         self.publisher = publisher
+        self.setup_runner = setup_runner
+        self.processor_manager = processor_manager
         self.calls: list[tuple[object, bool]] = []
         FakeExperimentService.created.append(self)
 
@@ -146,3 +150,9 @@ def test_run_experiment_uses_yaml_config_and_cli_overrides(
     assert "Experiment dry-run" in output
     assert "Produced Impressions" in output
     assert "cli_experiment" in output
+
+
+def test_full_system_local_experiment_resolves_to_standard_config_path() -> None:
+    path = run_experiment._experiment_config_path("full_system_local")
+
+    assert str(path) == "experiments/configs/full_system_local.yaml"

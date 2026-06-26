@@ -13,6 +13,7 @@ from ctx_ctr.models.experiment import (
     ExperimentDefinition,
     ExperimentRunResult,
     ExperimentRuntimeSnapshot,
+    ExperimentTrafficPhase,
     JsonObject,
     JsonValue,
 )
@@ -49,20 +50,74 @@ class ExperimentPostgresStore(Protocol):
     ) -> int: ...
 
 
+class ExperimentSetupRunner(Protocol):
+    """Destructive setup operations required by full-system experiments."""
+
+    def clean_topics(self) -> None: ...
+    def reset_values(self) -> None: ...
+    def seed_values(self) -> None: ...
+
+
+class ExperimentProcessorManager(Protocol):
+    """Child processor lifecycle operations required by full-system experiments."""
+
+    def start_processors(self, definition: ExperimentDefinition, *, run_dir: Path) -> JsonObject: ...
+    def assert_healthy(self) -> None: ...
+    def stop_processors(self) -> JsonObject: ...
+
+
+class NoOpExperimentSetupRunner:
+    """No-op setup runner used by simple and dry-run experiments."""
+
+    def clean_topics(self) -> None:
+        """Skip Kafka topic cleanup."""
+
+    def reset_values(self) -> None:
+        """Skip Redis/Postgres reset."""
+
+    def seed_values(self) -> None:
+        """Skip deterministic seeding."""
+
+
+class NoOpExperimentProcessorManager:
+    """No-op processor manager used by simple and dry-run experiments."""
+
+    def start_processors(self, definition: ExperimentDefinition, *, run_dir: Path) -> JsonObject:
+        """Skip processor startup."""
+
+        return {}
+
+    def assert_healthy(self) -> None:
+        """No processors need to be checked."""
+
+    def stop_processors(self) -> JsonObject:
+        """Skip processor shutdown."""
+
+        return {}
+
+
 class ExperimentArtifactWriter:
     """Write experiment artifacts to the local experiments folder."""
 
     def __init__(self, output_dir: str) -> None:
         self._output_dir = Path(output_dir)
 
+    def run_dir(self, *, experiment_name: str, started_at: datetime) -> Path:
+        """Return the deterministic artifact directory for one run."""
+
+        timestamp = started_at.strftime("%Y%m%d_%H%M%S")
+        return self._output_dir / f"{timestamp}_{experiment_name}"
+
     def write(self, result: ExperimentRunResult) -> str:
         """Write JSON and Markdown artifacts and return the JSON artifact path."""
 
-        self._output_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = result.started_at.strftime("%Y%m%d_%H%M%S")
-        stem = f"{timestamp}_{result.experiment_name}"
-        json_path = self._output_dir / f"{stem}.json"
-        md_path = self._output_dir / f"{stem}.md"
+        run_dir = self.run_dir(
+            experiment_name=result.experiment_name,
+            started_at=result.started_at,
+        )
+        run_dir.mkdir(parents=True, exist_ok=True)
+        json_path = run_dir / "result.json"
+        md_path = run_dir / "result.md"
         payload = result.model_dump(mode="json")
         json_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
         md_path.write_text(self._build_markdown(payload), encoding="utf-8")
@@ -97,28 +152,83 @@ class ExperimentService:
         postgres_store: ExperimentPostgresStore,
         artifact_writer: ExperimentArtifactWriter,
         publisher: EventPublisher,
+        setup_runner: ExperimentSetupRunner | None = None,
+        processor_manager: ExperimentProcessorManager | None = None,
     ) -> None:
         self._redis_reader = redis_reader
         self._postgres_store = postgres_store
         self._artifact_writer = artifact_writer
         self._publisher = publisher
+        self._setup_runner = setup_runner or NoOpExperimentSetupRunner()
+        self._processor_manager = processor_manager or NoOpExperimentProcessorManager()
 
     def run(self, definition: ExperimentDefinition, *, dry_run: bool) -> ExperimentRunResult:
         """Run one experiment and collect before/after metrics."""
 
         started_at = datetime.now(tz=UTC)
-        before_snapshot = self._collect_runtime_snapshot()
-        producer_result = self._produce_traffic(definition, dry_run=dry_run)
-        if definition.settle_seconds > 0 and not dry_run:
-            logger.info(f"Waiting {definition.settle_seconds} seconds for processors to settle")
-            time.sleep(definition.settle_seconds)
-        after_snapshot = self._collect_runtime_snapshot()
+        run_dir = self._artifact_writer.run_dir(
+            experiment_name=definition.experiment_name,
+            started_at=started_at,
+        )
+        setup_metrics: JsonObject = {}
+        processor_start_metrics: JsonObject = {}
+        processor_stop_metrics: JsonObject = {}
+        phase_results: list[JsonObject] = []
+        final_snapshot: ExperimentRuntimeSnapshot | None = None
+        before_snapshot: ExperimentRuntimeSnapshot | None = None
+        gate_metrics: JsonObject = {"passed": True, "failures": []}
+        try:
+            if not dry_run:
+                setup_metrics = self._run_setup(definition)
+            before_snapshot = self._collect_runtime_snapshot()
+            if not dry_run:
+                processor_start_metrics = self._processor_manager.start_processors(
+                    definition,
+                    run_dir=run_dir,
+                )
+                self._processor_manager.assert_healthy()
+                startup_seconds = self._processor_startup_seconds(definition)
+                if startup_seconds > 0:
+                    logger.info(f"Waiting {startup_seconds} seconds for processors to start")
+                    time.sleep(startup_seconds)
+                self._processor_manager.assert_healthy()
+            phase_results = self._run_traffic_phases(definition, dry_run=dry_run)
+            if definition.settle_seconds > 0 and not dry_run:
+                logger.info(f"Waiting {definition.settle_seconds} seconds for final settle")
+                time.sleep(definition.settle_seconds)
+            if not dry_run:
+                self._processor_manager.assert_healthy()
+            final_snapshot = self._collect_runtime_snapshot()
+            gate_metrics = self._evaluate_success_gates(
+                definition=definition,
+                before=before_snapshot,
+                after=final_snapshot,
+                phase_results=phase_results,
+                processor_start_metrics=processor_start_metrics,
+            )
+        except ExperimentFailure as error:
+            logger.warning(f"Experiment failed before gate evaluation completed: {error}")
+            final_snapshot = self._collect_runtime_snapshot()
+            gate_metrics = {
+                "passed": False,
+                "failures": [str(error)],
+            }
+        finally:
+            if not dry_run:
+                processor_stop_metrics = self._processor_manager.stop_processors()
+
         finished_at = datetime.now(tz=UTC)
+        after_snapshot = final_snapshot or self._collect_runtime_snapshot()
+        before_metrics_snapshot = before_snapshot or after_snapshot
         config_payload = self._build_config_payload(definition)
         metrics = self._build_metrics(
-            before=before_snapshot,
+            before=before_metrics_snapshot,
             after=after_snapshot,
-            producer_result=producer_result,
+            phase_results=phase_results,
+            setup_metrics=setup_metrics,
+            processor_start_metrics=processor_start_metrics,
+            processor_stop_metrics=processor_stop_metrics,
+            gate_metrics=gate_metrics,
         )
         result = ExperimentRunResult(
             experiment_name=definition.experiment_name,
@@ -147,24 +257,94 @@ class ExperimentService:
         self._artifact_writer.write(final_result)
         return final_result
 
-    def _produce_traffic(
+    def _run_setup(self, definition: ExperimentDefinition) -> JsonObject:
+        setup = definition.setup
+        metrics: JsonObject = {
+            "clean_topics": setup.clean_topics,
+            "reset_values": setup.reset_values,
+            "seed_values": setup.seed_values,
+        }
+        if setup.clean_topics:
+            logger.info("Cleaning Kafka topics for experiment")
+            self._setup_runner.clean_topics()
+        if setup.reset_values:
+            logger.info("Resetting values for experiment")
+            self._setup_runner.reset_values()
+        if setup.seed_values:
+            logger.info("Seeding values for experiment")
+            self._setup_runner.seed_values()
+        return metrics
+
+    def _run_traffic_phases(
         self,
         definition: ExperimentDefinition,
         *,
         dry_run: bool,
-    ) -> EventProducerResult:
-        traffic = definition.traffic
+    ) -> list[JsonObject]:
+        phases = self._traffic_phases(definition)
+        phase_results: list[JsonObject] = []
+        for phase in phases:
+            if not dry_run:
+                self._processor_manager.assert_healthy()
+            producer_result = self._produce_phase(phase, dry_run=dry_run or not definition.traffic.enabled)
+            if phase.settle_seconds > 0 and not dry_run:
+                logger.info(
+                    f"Waiting {phase.settle_seconds} seconds after traffic phase {phase.phase_name}"
+                )
+                time.sleep(phase.settle_seconds)
+            snapshot = self._collect_runtime_snapshot()
+            phase_results.append(
+                {
+                    "phase_name": phase.phase_name,
+                    "producer": cast(JsonObject, producer_result.model_dump(mode="json")),
+                    "snapshot": cast(JsonObject, snapshot.model_dump(mode="json")),
+                }
+            )
+        return phase_results
+
+    def _produce_phase(self, phase: ExperimentTrafficPhase, *, dry_run: bool) -> EventProducerResult:
         run_config = EventProducerRunConfig(
-            impressions=traffic.impressions,
-            events_per_second=traffic.events_per_second,
-            random_seed=traffic.random_seed,
-            log_every=traffic.log_every,
-            also_unified=traffic.also_unified,
-            dry_run=dry_run or not traffic.enabled,
+            impressions=phase.impressions,
+            events_per_second=phase.events_per_second,
+            random_seed=phase.random_seed,
+            log_every=phase.log_every,
+            also_unified=phase.also_unified,
+            dry_run=dry_run,
         )
-        if not traffic.enabled:
-            logger.info("Experiment traffic generation is disabled")
+        logger.info(
+            f"Starting experiment traffic phase {phase.phase_name}: "
+            f"impressions={phase.impressions}, events_per_second={phase.events_per_second}, "
+            f"dry_run={dry_run}"
+        )
         return EventSimulatorService(self._publisher).produce(run_config)
+
+    def _traffic_phases(self, definition: ExperimentDefinition) -> list[ExperimentTrafficPhase]:
+        traffic = definition.traffic
+        if traffic.phases:
+            return traffic.phases
+        return [
+            ExperimentTrafficPhase(
+                phase_name="default",
+                impressions=traffic.impressions,
+                events_per_second=traffic.events_per_second,
+                random_seed=traffic.random_seed,
+                settle_seconds=definition.settle_seconds,
+                log_every=traffic.log_every,
+                also_unified=traffic.also_unified,
+            )
+        ]
+
+    def _processor_startup_seconds(self, definition: ExperimentDefinition) -> float:
+        processors = [
+            definition.processors.realtime_ctr,
+            definition.processors.streaming_weight_update,
+        ]
+        enabled_startups = [
+            processor.startup_seconds
+            for processor in processors
+            if processor.enabled
+        ]
+        return max(enabled_startups, default=0.0)
 
     def _collect_runtime_snapshot(self) -> ExperimentRuntimeSnapshot:
         scan_result = self._redis_reader.scan_bucket_statistics()
@@ -204,12 +384,47 @@ class ExperimentService:
         *,
         before: ExperimentRuntimeSnapshot,
         after: ExperimentRuntimeSnapshot,
-        producer_result: EventProducerResult,
+        phase_results: list[JsonObject],
+        setup_metrics: JsonObject,
+        processor_start_metrics: JsonObject,
+        processor_stop_metrics: JsonObject,
+        gate_metrics: JsonObject,
     ) -> JsonObject:
         before_payload = cast(JsonObject, before.model_dump(mode="json"))
         after_payload = cast(JsonObject, after.model_dump(mode="json"))
+        total_impressions = sum(
+            int(cast(JsonObject, phase["producer"])["impressions"])
+            for phase in phase_results
+        )
+        total_clicks = sum(
+            int(cast(JsonObject, phase["producer"])["clicks"])
+            for phase in phase_results
+        )
+        total_events = sum(
+            int(cast(JsonObject, phase["producer"])["total_events"])
+            for phase in phase_results
+        )
         metrics: dict[str, JsonValue] = {
-            "producer": cast(JsonObject, producer_result.model_dump(mode="json")),
+            "setup": setup_metrics,
+            "processors": {
+                "started": processor_start_metrics,
+                "stopped": processor_stop_metrics,
+            },
+            "traffic": {
+                "phases": phase_results,
+                "total_impressions": total_impressions,
+                "total_clicks": total_clicks,
+                "total_events": total_events,
+            },
+            "producer": {
+                "dry_run": all(
+                    bool(cast(JsonObject, phase["producer"])["dry_run"])
+                    for phase in phase_results
+                ) if phase_results else False,
+                "impressions": total_impressions,
+                "clicks": total_clicks,
+                "total_events": total_events,
+            },
             "before": before_payload,
             "after": after_payload,
             "delta": {
@@ -231,5 +446,66 @@ class ExperimentService:
                     - before.postgres_experiment_result_count
                 ),
             },
+            "success_gates": gate_metrics,
         }
         return metrics
+
+    def _evaluate_success_gates(
+        self,
+        *,
+        definition: ExperimentDefinition,
+        before: ExperimentRuntimeSnapshot,
+        after: ExperimentRuntimeSnapshot,
+        phase_results: list[JsonObject],
+        processor_start_metrics: JsonObject,
+    ) -> JsonObject:
+        gates = definition.success_gates
+        failures: list[str] = []
+        produced_impressions = sum(
+            int(cast(JsonObject, phase["producer"])["impressions"])
+            for phase in phase_results
+        )
+        produced_clicks = sum(
+            int(cast(JsonObject, phase["producer"])["clicks"])
+            for phase in phase_results
+        )
+        redis_impression_delta = after.redis_total_impressions - before.redis_total_impressions
+        redis_click_delta = after.redis_total_clicks - before.redis_total_clicks
+        model_snapshot_delta = (
+            after.postgres_model_snapshot_count - before.postgres_model_snapshot_count
+        )
+        if (
+            gates.require_redis_impression_delta_match
+            and redis_impression_delta != produced_impressions
+        ):
+            failures.append(
+                "redis_impression_delta_mismatch"
+            )
+        if gates.require_redis_click_delta_match and redis_click_delta != produced_clicks:
+            failures.append("redis_click_delta_mismatch")
+        if gates.require_model_snapshot_created and model_snapshot_delta < 1:
+            failures.append("model_snapshot_not_created")
+        if after.redis_invalid_bucket_count > gates.max_invalid_redis_buckets:
+            failures.append("invalid_redis_bucket_count_too_high")
+        if gates.require_processor_health:
+            unhealthy_processors = [
+                name
+                for name, payload in processor_start_metrics.items()
+                if isinstance(payload, dict) and payload.get("early_exit") is True
+            ]
+            if unhealthy_processors:
+                failures.append("processor_exited_early")
+        return {
+            "passed": not failures,
+            "failures": failures,
+            "produced_impressions": produced_impressions,
+            "produced_clicks": produced_clicks,
+            "redis_impression_delta": redis_impression_delta,
+            "redis_click_delta": redis_click_delta,
+            "model_snapshot_delta": model_snapshot_delta,
+            "max_invalid_redis_buckets": gates.max_invalid_redis_buckets,
+        }
+
+
+class ExperimentFailure(RuntimeError):
+    """Raised when a strict experiment success gate fails."""

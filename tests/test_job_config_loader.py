@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from ctx_ctr.job_config_loader import JobConfigError, load_job_config, merge_job_config
+from ctx_ctr.models.experiment import ExperimentDefinition
 from ctx_ctr.models.job_configs import (
     CleanTopicsJobConfig,
     ProduceEventsJobConfig,
@@ -86,6 +87,27 @@ def test_realtime_ctr_defaults_to_project_jars_folder() -> None:
     config = RunRealtimeCtrJobConfig()
 
     assert config.kafka_connector_jar == "jars/flink-sql-connector-kafka-3.2.0-1.19.jar"
+
+
+def test_experiment_name_rejects_paths() -> None:
+    with pytest.raises(ValueError):
+        RunExperimentJobConfig(experiment_name="../full_system_local")
+
+
+def test_full_system_local_experiment_config_is_valid() -> None:
+    definition = load_job_config(
+        "experiments/configs/full_system_local.yaml",
+        ExperimentDefinition,
+    )
+
+    assert definition.experiment_name == "full_system_local"
+    assert definition.setup.reset_values is True
+    assert definition.setup.clean_topics is True
+    assert definition.setup.seed_values is True
+    assert definition.processors.realtime_ctr.enabled is True
+    assert definition.processors.streaming_weight_update.enabled is True
+    assert len(definition.traffic.phases) == 3
+    assert definition.success_gates.require_processor_health is True
 
 
 def test_default_job_configs_are_valid() -> None:
