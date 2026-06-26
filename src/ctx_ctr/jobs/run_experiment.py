@@ -312,10 +312,19 @@ def _result_lines(result: ExperimentRunResult) -> list[str]:
     after = metrics["after"]
     delta = metrics["delta"]
     success_gates = metrics.get("success_gates", {})
+    timing = metrics.get("timing", {})
+    traffic_timing = _metric_value(timing, "traffic")
+    teardown_timing = _metric_value(timing, "teardown")
     return [
         f"experiment: {result.experiment_name}",
         f"dry run: {result.dry_run}",
         f"duration seconds: {result.duration_seconds:.3f}",
+        f"timed total seconds: {_metric_value(timing, 'total_seconds')}",
+        f"traffic produce seconds: {_metric_value(traffic_timing, 'produce_seconds')}",
+        "observed events/sec: "
+        f"{_metric_value(traffic_timing, 'observed_events_per_second')}",
+        "processor stop seconds: "
+        f"{_metric_value(teardown_timing, 'processor_stop_seconds')}",
         f"produced impressions: {_metric_value(producer, 'impressions')}",
         f"produced clicks: {_metric_value(producer, 'clicks')}",
         f"produced total events: {_metric_value(producer, 'total_events')}",

@@ -223,6 +223,9 @@ def test_experiment_service_writes_artifacts_and_inserts_postgres_result(tmp_pat
     assert publisher.flushed is True
     assert result.metrics["delta"]["redis_total_impressions"] == 2
     assert result.metrics["before"]["current_model_snapshot_name"] == "current"
+    assert result.metrics["timing"]["total_seconds"] >= 0
+    assert result.metrics["timing"]["traffic"]["produce_seconds"] >= 0
+    assert result.metrics["timing"]["traffic"]["observed_events_per_second"] >= 0
 
 
 def test_experiment_service_dry_run_does_not_insert_postgres(tmp_path: Path) -> None:
@@ -298,6 +301,11 @@ def test_full_experiment_runs_setup_processors_phases_and_strict_gates(
     assert result.metrics["success_gates"]["passed"] is True
     assert result.metrics["success_gates"]["redis_impression_delta"] == 10
     assert result.metrics["success_gates"]["model_snapshot_delta"] == 1
+    assert result.metrics["timing"]["setup"]["total_seconds"] >= 0
+    assert result.metrics["timing"]["processors"]["start_seconds"] >= 0
+    assert result.metrics["timing"]["teardown"]["processor_stop_seconds"] >= 0
+    assert len(result.metrics["timing"]["traffic"]["phases"]) == 2
+    assert result.metrics["timing"]["traffic"]["phase_total_seconds"] >= 0
     assert postgres_store.inserted
 
 

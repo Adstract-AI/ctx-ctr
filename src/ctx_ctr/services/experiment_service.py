@@ -170,6 +170,7 @@ class ExperimentService:
             experiment_name=definition.experiment_name,
             started_at=started_at,
         )
+        run_started_monotonic = time.perf_counter()
         setup_metrics: JsonObject = {}
         processor_start_metrics: JsonObject = {}
         processor_stop_metrics: JsonObject = {}
@@ -177,28 +178,65 @@ class ExperimentService:
         final_snapshot: ExperimentRuntimeSnapshot | None = None
         before_snapshot: ExperimentRuntimeSnapshot | None = None
         gate_metrics: JsonObject = {"passed": True, "failures": []}
+        timing_metrics: JsonObject = {
+            "setup": {},
+            "processors": {},
+            "traffic": {},
+            "snapshots": {},
+            "validation": {},
+            "teardown": {},
+        }
         try:
             if not dry_run:
                 setup_metrics = self._run_setup(definition)
+                timing_metrics["setup"] = setup_metrics.get("timing", {})
+            before_snapshot_start = time.perf_counter()
             before_snapshot = self._collect_runtime_snapshot()
+            cast(dict[str, JsonValue], timing_metrics["snapshots"])["before_seconds"] = (
+                time.perf_counter() - before_snapshot_start
+            )
             if not dry_run:
+                processor_start = time.perf_counter()
                 processor_start_metrics = self._processor_manager.start_processors(
                     definition,
                     run_dir=run_dir,
                 )
+                cast(dict[str, JsonValue], timing_metrics["processors"])[
+                    "start_seconds"
+                ] = time.perf_counter() - processor_start
                 self._processor_manager.assert_healthy()
                 startup_seconds = self._processor_startup_seconds(definition)
                 if startup_seconds > 0:
                     logger.info(f"Waiting {startup_seconds} seconds for processors to start")
+                    startup_wait_start = time.perf_counter()
                     time.sleep(startup_seconds)
+                    cast(dict[str, JsonValue], timing_metrics["processors"])[
+                        "startup_wait_seconds"
+                    ] = time.perf_counter() - startup_wait_start
+                else:
+                    cast(dict[str, JsonValue], timing_metrics["processors"])[
+                        "startup_wait_seconds"
+                    ] = 0.0
                 self._processor_manager.assert_healthy()
             phase_results = self._run_traffic_phases(definition, dry_run=dry_run)
+            timing_metrics["traffic"] = self._traffic_timing(phase_results)
             if definition.settle_seconds > 0 and not dry_run:
                 logger.info(f"Waiting {definition.settle_seconds} seconds for final settle")
+                final_settle_start = time.perf_counter()
                 time.sleep(definition.settle_seconds)
+                timing_metrics["final_settle_seconds"] = (
+                    time.perf_counter() - final_settle_start
+                )
+            else:
+                timing_metrics["final_settle_seconds"] = 0.0
             if not dry_run:
                 self._processor_manager.assert_healthy()
+            final_snapshot_start = time.perf_counter()
             final_snapshot = self._collect_runtime_snapshot()
+            cast(dict[str, JsonValue], timing_metrics["snapshots"])["final_seconds"] = (
+                time.perf_counter() - final_snapshot_start
+            )
+            validation_start = time.perf_counter()
             gate_metrics = self._evaluate_success_gates(
                 definition=definition,
                 before=before_snapshot,
@@ -206,18 +244,30 @@ class ExperimentService:
                 phase_results=phase_results,
                 processor_start_metrics=processor_start_metrics,
             )
+            cast(dict[str, JsonValue], timing_metrics["validation"])["seconds"] = (
+                time.perf_counter() - validation_start
+            )
         except ExperimentFailure as error:
             logger.warning(f"Experiment failed before gate evaluation completed: {error}")
+            failure_snapshot_start = time.perf_counter()
             final_snapshot = self._collect_runtime_snapshot()
+            cast(dict[str, JsonValue], timing_metrics["snapshots"])[
+                "failure_final_seconds"
+            ] = time.perf_counter() - failure_snapshot_start
             gate_metrics = {
                 "passed": False,
                 "failures": [str(error)],
             }
         finally:
             if not dry_run:
+                teardown_start = time.perf_counter()
                 processor_stop_metrics = self._processor_manager.stop_processors()
+                timing_metrics["teardown"] = {
+                    "processor_stop_seconds": time.perf_counter() - teardown_start
+                }
 
         finished_at = datetime.now(tz=UTC)
+        timing_metrics["total_seconds"] = time.perf_counter() - run_started_monotonic
         after_snapshot = final_snapshot or self._collect_runtime_snapshot()
         before_metrics_snapshot = before_snapshot or after_snapshot
         config_payload = self._build_config_payload(definition)
@@ -229,6 +279,7 @@ class ExperimentService:
             processor_start_metrics=processor_start_metrics,
             processor_stop_metrics=processor_stop_metrics,
             gate_metrics=gate_metrics,
+            timing_metrics=timing_metrics,
         )
         result = ExperimentRunResult(
             experiment_name=definition.experiment_name,
@@ -264,15 +315,25 @@ class ExperimentService:
             "reset_values": setup.reset_values,
             "seed_values": setup.seed_values,
         }
+        timings: dict[str, float] = {}
+        setup_start = time.perf_counter()
         if setup.clean_topics:
             logger.info("Cleaning Kafka topics for experiment")
+            step_start = time.perf_counter()
             self._setup_runner.clean_topics()
+            timings["clean_topics_seconds"] = time.perf_counter() - step_start
         if setup.reset_values:
             logger.info("Resetting values for experiment")
+            step_start = time.perf_counter()
             self._setup_runner.reset_values()
+            timings["reset_values_seconds"] = time.perf_counter() - step_start
         if setup.seed_values:
             logger.info("Seeding values for experiment")
+            step_start = time.perf_counter()
             self._setup_runner.seed_values()
+            timings["seed_values_seconds"] = time.perf_counter() - step_start
+        timings["total_seconds"] = time.perf_counter() - setup_start
+        metrics["timing"] = timings
         return metrics
 
     def _run_traffic_phases(
@@ -284,23 +345,96 @@ class ExperimentService:
         phases = self._traffic_phases(definition)
         phase_results: list[JsonObject] = []
         for phase in phases:
+            phase_start = time.perf_counter()
             if not dry_run:
                 self._processor_manager.assert_healthy()
+            produce_start = time.perf_counter()
             producer_result = self._produce_phase(phase, dry_run=dry_run or not definition.traffic.enabled)
+            produce_seconds = time.perf_counter() - produce_start
+            settle_seconds = 0.0
             if phase.settle_seconds > 0 and not dry_run:
                 logger.info(
                     f"Waiting {phase.settle_seconds} seconds after traffic phase {phase.phase_name}"
                 )
+                settle_start = time.perf_counter()
                 time.sleep(phase.settle_seconds)
+                settle_seconds = time.perf_counter() - settle_start
+            snapshot_start = time.perf_counter()
             snapshot = self._collect_runtime_snapshot()
+            snapshot_seconds = time.perf_counter() - snapshot_start
+            phase_total_seconds = time.perf_counter() - phase_start
             phase_results.append(
                 {
                     "phase_name": phase.phase_name,
                     "producer": cast(JsonObject, producer_result.model_dump(mode="json")),
                     "snapshot": cast(JsonObject, snapshot.model_dump(mode="json")),
+                    "timing": {
+                        "produce_seconds": produce_seconds,
+                        "settle_seconds": settle_seconds,
+                        "snapshot_seconds": snapshot_seconds,
+                        "total_seconds": phase_total_seconds,
+                        "observed_events_per_second": (
+                            producer_result.total_events / produce_seconds
+                            if produce_seconds > 0
+                            else 0.0
+                        ),
+                        "observed_impressions_per_second": (
+                            producer_result.impressions / produce_seconds
+                            if produce_seconds > 0
+                            else 0.0
+                        ),
+                    },
                 }
             )
         return phase_results
+
+    def _traffic_timing(self, phase_results: list[JsonObject]) -> JsonObject:
+        phase_timings = [
+            {
+                "phase_name": phase["phase_name"],
+                **cast(JsonObject, phase["timing"]),
+            }
+            for phase in phase_results
+        ]
+        total_produce_seconds = sum(
+            float(cast(JsonObject, phase["timing"])["produce_seconds"])
+            for phase in phase_results
+        )
+        total_settle_seconds = sum(
+            float(cast(JsonObject, phase["timing"])["settle_seconds"])
+            for phase in phase_results
+        )
+        total_snapshot_seconds = sum(
+            float(cast(JsonObject, phase["timing"])["snapshot_seconds"])
+            for phase in phase_results
+        )
+        total_phase_seconds = sum(
+            float(cast(JsonObject, phase["timing"])["total_seconds"])
+            for phase in phase_results
+        )
+        total_events = sum(
+            int(cast(JsonObject, phase["producer"])["total_events"])
+            for phase in phase_results
+        )
+        total_impressions = sum(
+            int(cast(JsonObject, phase["producer"])["impressions"])
+            for phase in phase_results
+        )
+        return {
+            "phases": phase_timings,
+            "produce_seconds": total_produce_seconds,
+            "settle_seconds": total_settle_seconds,
+            "snapshot_seconds": total_snapshot_seconds,
+            "phase_total_seconds": total_phase_seconds,
+            "observed_events_per_second": (
+                total_events / total_produce_seconds if total_produce_seconds > 0 else 0.0
+            ),
+            "observed_impressions_per_second": (
+                total_impressions / total_produce_seconds
+                if total_produce_seconds > 0
+                else 0.0
+            ),
+        }
 
     def _produce_phase(self, phase: ExperimentTrafficPhase, *, dry_run: bool) -> EventProducerResult:
         run_config = EventProducerRunConfig(
@@ -389,6 +523,7 @@ class ExperimentService:
         processor_start_metrics: JsonObject,
         processor_stop_metrics: JsonObject,
         gate_metrics: JsonObject,
+        timing_metrics: JsonObject,
     ) -> JsonObject:
         before_payload = cast(JsonObject, before.model_dump(mode="json"))
         after_payload = cast(JsonObject, after.model_dump(mode="json"))
@@ -447,6 +582,7 @@ class ExperimentService:
                 ),
             },
             "success_gates": gate_metrics,
+            "timing": timing_metrics,
         }
         return metrics
 

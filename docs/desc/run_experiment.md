@@ -102,6 +102,7 @@ Writes:
 - local JSON/Markdown artifacts under `experiments/results/`
 - Postgres `ctr_experiment_results` when not in dry-run mode
 - processor log files under the experiment artifact directory
+- timing metrics inside the `timing` section of the result artifact
 
 `full_system_local` is intentionally destructive for local CTR state: it cleans
 CTR Kafka topics and resets seed-owned Redis/Postgres values before seeding.
@@ -138,6 +139,10 @@ run-experiment --experiment my_experiment
 
 The terminal prints a final boxed summary with:
 
+- total measured runtime
+- traffic production time
+- observed events per second
+- processor teardown time
 - produced impressions, clicks, and total events
 - Redis bucket counts before and after
 - Redis impression/click deltas
@@ -149,3 +154,7 @@ The terminal prints a final boxed summary with:
 For `full_system_local`, success gates fail the command after artifacts and the
 Postgres experiment result are written. Check the artifact directory for
 `result.json`, `result.md`, and processor logs.
+
+The JSON artifact includes detailed timings for setup, processor startup,
+startup wait, each traffic phase, phase settle waits, Redis/Postgres snapshot
+collection, validation, processor teardown, and total orchestration time.
