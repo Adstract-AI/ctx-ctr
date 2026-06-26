@@ -24,6 +24,8 @@ Current jobs:
 - [clean_topics](clean_topics.md)
 - [persist_redis_buckets](persist_redis_buckets.md)
 - [produce_events](produce_events.md)
+- [run_experiment](run_experiment.md)
 - [run_realtime_ctr](run_realtime_ctr.md)
+- [run_streaming_weight_update](run_streaming_weight_update.md)
 - [run_weight_update](run_weight_update.md)
 - [watch_redis_values](watch_redis_values.md)

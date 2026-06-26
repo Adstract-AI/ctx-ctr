@@ -11,6 +11,7 @@ from psycopg.types.json import Jsonb
 
 from ctx_ctr.exceptions import WeightUpdateError
 from ctx_ctr.logging_config import get_logger
+from ctx_ctr.models.experiment import JsonObject
 from ctx_ctr.models.seed import SeedBucketStatistic, SeedModelSnapshot
 from ctx_ctr.models.weight_update import WeightUpdateRunMetrics
 
@@ -153,6 +154,78 @@ class PostgresRuntimeAdapter:
         except psycopg.Error as error:
             connection.rollback()
             raise WeightUpdateError("Failed to persist PostgreSQL bucket statistics") from error
+
+    def count_model_snapshots(self) -> int:
+        """Return the number of model snapshots currently stored."""
+
+        connection = self._require_connection()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM ctr_model_snapshots")
+                row = cursor.fetchone()
+        except psycopg.Error as error:
+            raise WeightUpdateError("Failed to count PostgreSQL model snapshots") from error
+        if row is None:
+            raise WeightUpdateError("PostgreSQL model snapshot count returned no rows")
+        return int(row[0])
+
+    def count_experiment_results(self) -> int:
+        """Return the number of experiment result rows currently stored."""
+
+        connection = self._require_connection()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM ctr_experiment_results")
+                row = cursor.fetchone()
+        except psycopg.Error as error:
+            raise WeightUpdateError("Failed to count PostgreSQL experiment results") from error
+        if row is None:
+            raise WeightUpdateError("PostgreSQL experiment result count returned no rows")
+        return int(row[0])
+
+    def insert_experiment_result(
+        self,
+        *,
+        experiment_name: str,
+        config: JsonObject,
+        metrics: JsonObject,
+        artifact_uri: str | None,
+    ) -> int:
+        """Insert one experiment result row and return its database id."""
+
+        connection = self._require_connection()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO ctr_experiment_results (
+                        experiment_name,
+                        config,
+                        metrics,
+                        artifact_uri
+                    )
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (
+                        experiment_name,
+                        Jsonb(config),
+                        Jsonb(metrics),
+                        artifact_uri,
+                    ),
+                )
+                row = cursor.fetchone()
+            connection.commit()
+        except psycopg.Error as error:
+            connection.rollback()
+            raise WeightUpdateError("Failed to insert PostgreSQL experiment result") from error
+
+        if row is None:
+            raise WeightUpdateError("PostgreSQL experiment result insert did not return an id")
+
+        experiment_id = int(row[0])
+        logger.debug(f"Inserted PostgreSQL experiment result {experiment_name} with id {experiment_id}")
+        return experiment_id
 
     def _require_connection(self) -> psycopg.Connection[tuple[Any, ...]]:
         if self._connection is None:

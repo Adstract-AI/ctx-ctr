@@ -5,13 +5,16 @@ from pathlib import Path
 import pytest
 
 from ctx_ctr.job_config_loader import JobConfigError, load_job_config, merge_job_config
+from ctx_ctr.models.experiment import ExperimentDefinition, ExperimentTrafficConfig
 from ctx_ctr.models.job_configs import (
     CleanTopicsJobConfig,
     ProduceEventsJobConfig,
     PersistRedisBucketsJobConfig,
     ResetValuesJobConfig,
+    RunExperimentJobConfig,
     RunWeightUpdateJobConfig,
     RunRealtimeCtrJobConfig,
+    RunStreamingWeightUpdateJobConfig,
     SeedValuesJobConfig,
 )
 
@@ -86,6 +89,53 @@ def test_realtime_ctr_defaults_to_project_jars_folder() -> None:
     assert config.kafka_connector_jar == "jars/flink-sql-connector-kafka-3.2.0-1.19.jar"
 
 
+def test_experiment_name_rejects_paths() -> None:
+    with pytest.raises(ValueError):
+        RunExperimentJobConfig(experiment_name="../full_system_local")
+
+
+def test_full_system_local_experiment_config_is_valid() -> None:
+    definition = load_job_config(
+        "experiments/configs/full_system_local.yaml",
+        ExperimentDefinition,
+    )
+
+    assert definition.experiment_name == "full_system_local"
+    assert definition.setup.reset_values is True
+    assert definition.setup.clean_topics is True
+    assert definition.setup.seed_values is True
+    assert definition.processors.realtime_ctr.enabled is True
+    assert definition.processors.streaming_weight_update.enabled is True
+    assert len(definition.traffic.phases) == 3
+    assert definition.traffic.impressions is None
+    assert definition.traffic.events_per_second is None
+    assert definition.success_gates.require_processor_health is True
+
+
+def test_phased_traffic_config_does_not_require_single_phase_fields() -> None:
+    config = ExperimentTrafficConfig.model_validate(
+        {
+            "enabled": True,
+            "phases": [
+                {
+                    "phase_name": "one",
+                    "impressions": 10,
+                    "events_per_second": 1,
+                    "random_seed": 1,
+                }
+            ],
+        }
+    )
+
+    assert config.impressions is None
+    assert len(config.phases) == 1
+
+
+def test_single_phase_traffic_config_requires_fallback_fields() -> None:
+    with pytest.raises(ValueError):
+        ExperimentTrafficConfig(enabled=True, random_seed=1, log_every=0, also_unified=False)
+
+
 def test_default_job_configs_are_valid() -> None:
     config_specs = [
         ("configs/seed_values.yaml", SeedValuesJobConfig),
@@ -93,7 +143,9 @@ def test_default_job_configs_are_valid() -> None:
         ("configs/clean_topics.yaml", CleanTopicsJobConfig),
         ("configs/persist_redis_buckets.yaml", PersistRedisBucketsJobConfig),
         ("configs/produce_events.yaml", ProduceEventsJobConfig),
+        ("configs/run_experiment.yaml", RunExperimentJobConfig),
         ("configs/run_realtime_ctr.yaml", RunRealtimeCtrJobConfig),
+        ("configs/run_streaming_weight_update.yaml", RunStreamingWeightUpdateJobConfig),
         ("configs/run_weight_update.yaml", RunWeightUpdateJobConfig),
     ]
 

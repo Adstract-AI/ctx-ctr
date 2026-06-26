@@ -136,6 +136,39 @@ class RunWeightUpdateJobConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class RunStreamingWeightUpdateJobConfig(BaseModel):
+    """Configuration for the Flink-native streaming weight-update job."""
+
+    impression_topic: str = IMPRESSION_TOPIC
+    click_topic: str = CLICK_TOPIC
+    consumer_group: str = "ctx-ctr-flink-streaming-weight-update"
+    parallelism: int = Field(default=1, gt=0)
+    checkpoint_interval_ms: int = Field(default=10000, ge=0)
+    kafka_connector_jar: str = DEFAULT_FLINK_KAFKA_CONNECTOR_JAR
+    interval_seconds: int = Field(default=DEFAULT_WEIGHT_UPDATE_INTERVAL_SECONDS, gt=0)
+    learning_rate: float = Field(default=DEFAULT_WEIGHT_UPDATE_LEARNING_RATE, gt=0)
+    evidence_smoothing: float = Field(default=DEFAULT_WEIGHT_UPDATE_EVIDENCE_SMOOTHING, ge=0)
+    ridge: float = Field(default=DEFAULT_WEIGHT_UPDATE_RIDGE, ge=0)
+    max_delta: float = Field(default=DEFAULT_WEIGHT_UPDATE_MAX_DELTA, gt=0)
+    min_feature_impressions: int = Field(
+        default=DEFAULT_WEIGHT_UPDATE_MIN_FEATURE_IMPRESSIONS,
+        ge=1,
+    )
+    max_feature_ci_width: float = Field(
+        default=DEFAULT_WEIGHT_UPDATE_MAX_FEATURE_CI_WIDTH,
+        gt=0,
+    )
+    snapshot_name_prefix: str = Field(default="flink_streaming_weight_update", min_length=1)
+    baseline_update: bool = True
+    baseline_max_ci_width: float = Field(
+        default=DEFAULT_WEIGHT_UPDATE_BASELINE_MAX_CI_WIDTH,
+        gt=0,
+    )
+    dry_run: bool = False
+
+    model_config = ConfigDict(frozen=True)
+
+
 class PersistRedisBucketsJobConfig(BaseModel):
     """Configuration for Redis-to-Postgres bucket persistence."""
 
@@ -155,5 +188,19 @@ class WatchRedisValuesJobConfig(BaseModel):
     ad_category: str | None = None
     publisher_domain: str | None = None
     conversation_category: str | None = None
+
+    model_config = ConfigDict(frozen=True)
+
+
+class RunExperimentJobConfig(BaseModel):
+    """Configuration for the experiment runner job."""
+
+    experiment_name: str = Field(
+        default="local_smoke",
+        min_length=1,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+    output_dir: str = "experiments/results"
+    dry_run: bool = False
 
     model_config = ConfigDict(frozen=True)

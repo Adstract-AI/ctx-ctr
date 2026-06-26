@@ -1,0 +1,392 @@
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: Configured streaming weight update job: impression_topic=ctr.impressions, click_topic=ctr.clicks, consumer_group=ctx-ctr-exp-full-system-weight, parallelism=1, checkpoint_interval_ms=10000, interval_seconds=4, dry_run=False, config=configs/run_streaming_weight_update.yaml[0m
+/Users/itonkdong/miniconda3/envs/big-data/lib/python3.11/site-packages/apache_beam/runners/portability/stager.py:63: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: Loaded current model for streaming weight update: snapshot_name=seed_values_v1[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: Registered first streaming weight-update timer at 1782471208196[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105329 with PostgreSQL id 2[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 113                                                   |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 71                                                    |
+|  Valid Buckets     : 71                                                    |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 0                                                     |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.017654                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105329         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105333 with PostgreSQL id 3[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 192                                                   |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 82                                                    |
+|  Valid Buckets     : 82                                                    |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 3                                                     |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.016376                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105333         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105337 with PostgreSQL id 4[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 326                                                   |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 97                                                    |
+|  Valid Buckets     : 97                                                    |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 13                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.014144                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105337         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105342 with PostgreSQL id 5[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 405                                                   |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 98                                                    |
+|  Valid Buckets     : 98                                                    |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.012940                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105342         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105345 with PostgreSQL id 6[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 405                                                   |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 98                                                    |
+|  Valid Buckets     : 98                                                    |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.012607                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105345         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105349 with PostgreSQL id 7[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 453                                                   |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 98                                                    |
+|  Valid Buckets     : 98                                                    |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.013239                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105349         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105353 with PostgreSQL id 8[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 667                                                   |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 99                                                    |
+|  Valid Buckets     : 99                                                    |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.012873                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105353         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105357 with PostgreSQL id 9[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 774                                                   |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 100                                                   |
+|  Valid Buckets     : 100                                                   |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.012675                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105357         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105402 with PostgreSQL id 10[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 1027                                                  |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 100                                                   |
+|  Valid Buckets     : 100                                                   |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.012529                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105402         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105406 with PostgreSQL id 11[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 1195                                                  |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 100                                                   |
+|  Valid Buckets     : 100                                                   |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.012040                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105406         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105409 with PostgreSQL id 12[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 1302                                                  |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 100                                                   |
+|  Valid Buckets     : 100                                                   |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.011808                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105409         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105413 with PostgreSQL id 13[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 1451                                                  |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 100                                                   |
+|  Valid Buckets     : 100                                                   |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.011459                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105413         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105417 with PostgreSQL id 14[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 1623                                                  |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 100                                                   |
+|  Valid Buckets     : 100                                                   |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.011012                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105417         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105421 with PostgreSQL id 15[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 1638                                                  |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 100                                                   |
+|  Valid Buckets     : 100                                                   |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.010940                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105421         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105425 with PostgreSQL id 16[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 1686                                                  |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 100                                                   |
+|  Valid Buckets     : 100                                                   |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.010690                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105425         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105429 with PostgreSQL id 17[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 1978                                                  |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 100                                                   |
+|  Valid Buckets     : 100                                                   |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.009778                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105429         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105433 with PostgreSQL id 18[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 2043                                                  |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 100                                                   |
+|  Valid Buckets     : 100                                                   |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.009564                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105433         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105437 with PostgreSQL id 19[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 2043                                                  |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 100                                                   |
+|  Valid Buckets     : 100                                                   |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.009546                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105437         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[36mINFO ctx_ctr.services.weight_update_service: Applied weight update snapshot flink_streaming_weight_update_20260626_105441 with PostgreSQL id 20[0m
+[36mINFO ctx_ctr.jobs.run_streaming_weight_update: 
++========================= STREAMING WEIGHT UPDATE ==========================+
+|  Job               : Streaming Weight Update Timer                         |
+|  Status            : ACCEPTED                                              |
+|  Dry Run           : False                                                 |
+|  Processed Events  : 2043                                                  |
+|  Invalid Events    : 0                                                     |
+|  Triplets          : 100                                                   |
+|  Valid Buckets     : 100                                                   |
+|  Invalid Buckets   : 0                                                     |
+|  Updated Features  : 14                                                    |
+|  Baseline Applied  : True                                                  |
+|  Baseline Ci Width : 0.009543                                              |
+|  Baseline Guard    : baseline_guards_passed                                |
+|  Redis Write       : True                                                  |
+|  Postgres Write    : True                                                  |
+|  Snapshot          : flink_streaming_weight_update_20260626_105441         |
+|  Skip Reason       : none                                                  |
++============================================================================+[0m
+[32m+=========================== SUCCESS JOB SUMMARY ============================+[0m
+[32m|  Job              : Streaming weight update job stopped                    |[0m
+[32m|  Status           : SUCCESS                                                |[0m
+[32m|  Status           : interrupted by user                                    |[0m
+[32m|  Impression Topic : ctr.impressions                                        |[0m
+[32m|  Click Topic      : ctr.clicks                                             |[0m
+[32m+============================================================================+[0m

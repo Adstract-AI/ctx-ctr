@@ -34,6 +34,25 @@ def print_failure(title: str, error: BaseException) -> None:
         print(error_line(line))
 
 
+def format_summary_box(
+    *,
+    heading: str,
+    title: str,
+    status: str,
+    lines: Iterable[str],
+) -> str:
+    """Return a plain boxed summary string for logging."""
+
+    return "\n".join(
+        _summary_box(
+            heading=heading,
+            title=title,
+            status=status,
+            lines=lines,
+        )
+    )
+
+
 def _summary_box(
     *,
     heading: str,
