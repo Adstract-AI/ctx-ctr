@@ -190,3 +190,17 @@ class WatchRedisValuesJobConfig(BaseModel):
     conversation_category: str | None = None
 
     model_config = ConfigDict(frozen=True)
+
+
+class RunExperimentJobConfig(BaseModel):
+    """Configuration for the experiment runner job."""
+
+    experiment_name: str = Field(
+        default="local_smoke",
+        min_length=1,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+    output_dir: str = "experiments/results"
+    dry_run: bool = False
+
+    model_config = ConfigDict(frozen=True)

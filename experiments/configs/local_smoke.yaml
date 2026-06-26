@@ -1,0 +1,13 @@
+experiment_name: local_smoke
+description: Small local experiment that produces traffic and records Redis/Postgres deltas.
+settle_seconds: 5
+tags:
+  - local
+  - smoke
+traffic:
+  enabled: true
+  impressions: 250
+  events_per_second: 25
+  random_seed: 42
+  log_every: 100
+  also_unified: false

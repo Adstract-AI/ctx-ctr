@@ -1,0 +1,3 @@
+experiment_name: local_smoke
+output_dir: experiments/results
+dry_run: false
