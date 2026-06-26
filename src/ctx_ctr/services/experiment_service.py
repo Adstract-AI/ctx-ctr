@@ -456,6 +456,11 @@ class ExperimentService:
         traffic = definition.traffic
         if traffic.phases:
             return traffic.phases
+        if (
+            traffic.impressions is None
+            or traffic.events_per_second is None
+        ):
+            raise ExperimentFailure("traffic_without_phases_is_missing_single_phase_fields")
         return [
             ExperimentTrafficPhase(
                 phase_name="default",
@@ -511,7 +516,7 @@ class ExperimentService:
         )
 
     def _build_config_payload(self, definition: ExperimentDefinition) -> JsonObject:
-        return cast(JsonObject, definition.model_dump(mode="json"))
+        return cast(JsonObject, definition.model_dump(mode="json", exclude_none=True))
 
     def _build_metrics(
         self,

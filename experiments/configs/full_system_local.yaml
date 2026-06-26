@@ -42,11 +42,8 @@ processors:
     stop_timeout_seconds: 20
 traffic:
   enabled: true
-  impressions: 100
-  events_per_second: 20
-  random_seed: 42
-  log_every: 100
-  also_unified: false
+  impressions: null
+  events_per_second: null
   phases:
     - phase_name: warmup
       impressions: 400

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from ctx_ctr.job_config_loader import JobConfigError, load_job_config, merge_job_config
-from ctx_ctr.models.experiment import ExperimentDefinition
+from ctx_ctr.models.experiment import ExperimentDefinition, ExperimentTrafficConfig
 from ctx_ctr.models.job_configs import (
     CleanTopicsJobConfig,
     ProduceEventsJobConfig,
@@ -107,7 +107,33 @@ def test_full_system_local_experiment_config_is_valid() -> None:
     assert definition.processors.realtime_ctr.enabled is True
     assert definition.processors.streaming_weight_update.enabled is True
     assert len(definition.traffic.phases) == 3
+    assert definition.traffic.impressions is None
+    assert definition.traffic.events_per_second is None
     assert definition.success_gates.require_processor_health is True
+
+
+def test_phased_traffic_config_does_not_require_single_phase_fields() -> None:
+    config = ExperimentTrafficConfig.model_validate(
+        {
+            "enabled": True,
+            "phases": [
+                {
+                    "phase_name": "one",
+                    "impressions": 10,
+                    "events_per_second": 1,
+                    "random_seed": 1,
+                }
+            ],
+        }
+    )
+
+    assert config.impressions is None
+    assert len(config.phases) == 1
+
+
+def test_single_phase_traffic_config_requires_fallback_fields() -> None:
+    with pytest.raises(ValueError):
+        ExperimentTrafficConfig(enabled=True, random_seed=1, log_every=0, also_unified=False)
 
 
 def test_default_job_configs_are_valid() -> None:

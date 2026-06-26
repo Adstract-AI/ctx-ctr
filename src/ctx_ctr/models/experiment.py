@@ -15,14 +15,35 @@ class ExperimentTrafficConfig(BaseModel):
     """Traffic generation settings for one experiment run."""
 
     enabled: bool = True
-    impressions: int = Field(default=1000, gt=0)
-    events_per_second: float = Field(default=20.0, ge=0)
+    impressions: int | None = Field(default=None, gt=0)
+    events_per_second: float | None = Field(default=None, ge=0)
     random_seed: int = 42
     log_every: int = Field(default=100, ge=0)
     also_unified: bool = False
     phases: list["ExperimentTrafficPhase"] = Field(default_factory=list)
 
     model_config = ConfigDict(frozen=True)
+
+    @model_validator(mode="after")
+    def validate_single_phase_fields(self) -> "ExperimentTrafficConfig":
+        """Require fallback traffic fields only when no explicit phases are configured."""
+
+        if self.phases:
+            return self
+        missing_fields = [
+            field_name
+            for field_name in (
+                "impressions",
+                "events_per_second",
+            )
+            if getattr(self, field_name) is None
+        ]
+        if missing_fields:
+            raise ValueError(
+                "traffic without phases must define "
+                + ", ".join(missing_fields)
+            )
+        return self
 
 
 class ExperimentTrafficPhase(BaseModel):

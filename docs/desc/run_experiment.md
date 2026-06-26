@@ -43,6 +43,12 @@ processors for lightweight experiments like `local_smoke`.
 For `full_system_local`, the job does start and stop the local processor
 subprocesses itself.
 
+Traffic configs support two shapes:
+
+- single-phase experiments define `impressions` and `events_per_second`
+- phased experiments define `phases`; the single-phase fallback fields should be
+  omitted
+
 ## Default Config
 
 Job config:
