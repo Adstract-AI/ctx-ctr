@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import time
 from pathlib import Path
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -125,7 +126,13 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
             self._service: RealtimeCtrUpdateService | None = None
             self._bucket_state: Any | None = None
             self._valid_events = 0
+            self._processed_events = 0
+            self._impressions = 0
+            self._clicks = 0
             self._dead_letters = 0
+            self._started_monotonic = time.perf_counter()
+            self._last_log_monotonic = self._started_monotonic
+            self._last_log_processed_events = 0
 
         def open(self, runtime_context: Any) -> None:
             """Initialize Redis-backed model state and keyed Flink state."""
@@ -151,7 +158,9 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
             try:
                 event = CtrEvent.model_validate_json(value)
             except ValidationError:
+                self._processed_events += 1
                 self._dead_letters += 1
+                self._log_metrics()
                 yield _dead_letter_json("invalid_event_payload", {"raw": value})
                 return
 
@@ -162,7 +171,9 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
             result = service.apply_event(event, bucket)
 
             if result.dead_letter is not None:
+                self._processed_events += 1
                 self._dead_letters += 1
+                self._log_metrics()
                 yield result.dead_letter.model_dump_json()
                 return
 
@@ -171,16 +182,18 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
 
             state.update(result.bucket.model_dump_json())
             adapter.write_bucket_statistic(result.bucket)
+            self._processed_events += 1
             self._valid_events += 1
-            if self._should_log_progress():
-                logger.info(
-                    f"Processed {self._valid_events} valid CTR events; "
-                    f"dead_letters={self._dead_letters}"
-                )
+            if event.event_type == "impression":
+                self._impressions += 1
+            elif event.event_type == "click":
+                self._clicks += 1
+            self._log_metrics()
 
         def close(self) -> None:
             """Close Redis resources."""
 
+            self._log_metrics(force=True)
             if self._adapter is not None:
                 self._adapter.close()
 
@@ -211,7 +224,38 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
             return self._bucket_state
 
         def _should_log_progress(self) -> bool:
-            return self._log_every > 0 and self._valid_events % self._log_every == 0
+            return self._log_every > 0 and self._processed_events % self._log_every == 0
+
+        def _log_metrics(self, *, force: bool = False) -> None:
+            if not force and not self._should_log_progress():
+                return
+            if self._processed_events == self._last_log_processed_events:
+                return
+            now = time.perf_counter()
+            elapsed_seconds = now - self._started_monotonic
+            window_seconds = now - self._last_log_monotonic
+            window_events = self._processed_events - self._last_log_processed_events
+            metrics = {
+                "processed_events": self._processed_events,
+                "valid_events": self._valid_events,
+                "impressions": self._impressions,
+                "clicks": self._clicks,
+                "dead_letters": self._dead_letters,
+                "elapsed_seconds": elapsed_seconds,
+                "events_per_second": (
+                    self._processed_events / elapsed_seconds
+                    if elapsed_seconds > 0
+                    else 0.0
+                ),
+                "window_events": window_events,
+                "window_seconds": window_seconds,
+                "window_events_per_second": (
+                    window_events / window_seconds if window_seconds > 0 else 0.0
+                ),
+            }
+            logger.info(f"CTR_PROCESSOR_METRICS {json.dumps(metrics, sort_keys=True)}")
+            self._last_log_monotonic = now
+            self._last_log_processed_events = self._processed_events
 
     env = StreamExecutionEnvironment.get_execution_environment()
     env.set_parallelism(config.parallelism)

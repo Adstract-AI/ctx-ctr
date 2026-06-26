@@ -141,7 +141,8 @@ The terminal prints a final boxed summary with:
 
 - total measured runtime
 - traffic production time
-- observed events per second
+- observed producer events per second
+- realtime CTR processed events per second from processor logs
 - processor teardown time
 - produced impressions, clicks, and total events
 - Redis bucket counts before and after
@@ -158,3 +159,8 @@ Postgres experiment result are written. Check the artifact directory for
 The JSON artifact includes detailed timings for setup, processor startup,
 startup wait, each traffic phase, phase settle waits, Redis/Postgres snapshot
 collection, validation, processor teardown, and total orchestration time.
+
+The producer throughput metrics measure how fast the experiment sent events to
+Kafka. Realtime CTR consumer throughput is parsed separately from
+`CTR_PROCESSOR_METRICS` records emitted by the `realtime-ctr` subprocess and is
+stored under `processor_metrics.realtime_ctr`.

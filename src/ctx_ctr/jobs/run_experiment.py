@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import signal
 import subprocess
 import sys
@@ -179,6 +180,7 @@ class SubprocessExperimentProcessorManager:
                 exit_code = processor.process.wait(timeout=5)
         processor.log_handle.close()
         stopped_at = datetime.now(tz=UTC)
+        parsed_metrics = _parse_processor_metrics(processor.log_path)
         logger.info(
             f"Stopped experiment processor {processor.name}: "
             f"exit_code={exit_code}, forced={forced}"
@@ -191,6 +193,7 @@ class SubprocessExperimentProcessorManager:
             "stopped_at": stopped_at.isoformat(),
             "exit_code": exit_code,
             "forced": forced,
+            "metrics": parsed_metrics,
         }
 
     def _resolve_command(self, command: list[str]) -> list[str]:
@@ -315,6 +318,7 @@ def _result_lines(result: ExperimentRunResult) -> list[str]:
     timing = metrics.get("timing", {})
     traffic_timing = _metric_value(timing, "traffic")
     teardown_timing = _metric_value(timing, "teardown")
+    realtime_metrics = _processor_latest_metrics(metrics, "realtime_ctr")
     return [
         f"experiment: {result.experiment_name}",
         f"dry run: {result.dry_run}",
@@ -323,6 +327,10 @@ def _result_lines(result: ExperimentRunResult) -> list[str]:
         f"traffic produce seconds: {_metric_value(traffic_timing, 'produce_seconds')}",
         "observed events/sec: "
         f"{_metric_value(traffic_timing, 'observed_events_per_second')}",
+        "realtime processed events/sec: "
+        f"{_metric_value(realtime_metrics, 'events_per_second')}",
+        "realtime processed events: "
+        f"{_metric_value(realtime_metrics, 'processed_events')}",
         "processor stop seconds: "
         f"{_metric_value(teardown_timing, 'processor_stop_seconds')}",
         f"produced impressions: {_metric_value(producer, 'impressions')}",
@@ -345,6 +353,61 @@ def _metric_value(payload: object, key: str) -> object:
     if isinstance(payload, dict):
         return payload.get(key, "n/a")
     return "n/a"
+
+
+def _processor_latest_metrics(metrics: dict[str, object], processor_name: str) -> object:
+    processors = metrics.get("processors")
+    if not isinstance(processors, dict):
+        return {}
+    stopped = processors.get("stopped")
+    if not isinstance(stopped, dict):
+        return {}
+    processor = stopped.get(processor_name)
+    if not isinstance(processor, dict):
+        return {}
+    parsed_metrics = processor.get("metrics")
+    if not isinstance(parsed_metrics, dict):
+        return {}
+    latest = parsed_metrics.get("latest")
+    if isinstance(latest, dict):
+        return latest
+    return {}
+
+
+def _parse_processor_metrics(log_path: Path) -> dict[str, object]:
+    """Parse machine-readable processor metrics emitted in child job logs."""
+
+    if not log_path.is_file():
+        return {"records": [], "latest": None, "count": 0}
+    records: list[dict[str, object]] = []
+    for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        marker_index = line.find("CTR_PROCESSOR_METRICS ")
+        if marker_index < 0:
+            continue
+        payload = _extract_json_object(line[marker_index + len("CTR_PROCESSOR_METRICS ") :])
+        if payload is None:
+            continue
+        try:
+            parsed = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            records.append(parsed)
+    return {
+        "records": records,
+        "latest": records[-1] if records else None,
+        "count": len(records),
+    }
+
+
+def _extract_json_object(text: str) -> str | None:
+    """Extract the first JSON object from a log suffix that may contain ANSI codes."""
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end < start:
+        return None
+    return text[start : end + 1]
 
 
 if __name__ == "__main__":

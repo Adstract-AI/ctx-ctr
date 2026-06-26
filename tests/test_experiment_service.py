@@ -140,7 +140,19 @@ class RecordingProcessorManager:
 
     def stop_processors(self) -> JsonObject:
         self.stopped = True
-        return {"realtime_ctr": {"exit_code": 0, "forced": False}}
+        return {
+            "realtime_ctr": {
+                "exit_code": 0,
+                "forced": False,
+                "metrics": {
+                    "count": 1,
+                    "latest": {
+                        "processed_events": 10,
+                        "events_per_second": 4.5,
+                    },
+                },
+            }
+        }
 
 
 class SequenceRedisReader(FakeRedisReader):
@@ -306,6 +318,8 @@ def test_full_experiment_runs_setup_processors_phases_and_strict_gates(
     assert result.metrics["timing"]["teardown"]["processor_stop_seconds"] >= 0
     assert len(result.metrics["timing"]["traffic"]["phases"]) == 2
     assert result.metrics["timing"]["traffic"]["phase_total_seconds"] >= 0
+    assert result.metrics["processor_metrics"]["realtime_ctr"]["latest"]["processed_events"] == 10
+    assert result.metrics["processor_metrics"]["realtime_ctr"]["latest"]["events_per_second"] == 4.5
     assert postgres_store.inserted
 
 

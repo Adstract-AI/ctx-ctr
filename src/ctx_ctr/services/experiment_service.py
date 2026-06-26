@@ -545,6 +545,7 @@ class ExperimentService:
                 "started": processor_start_metrics,
                 "stopped": processor_stop_metrics,
             },
+            "processor_metrics": self._build_processor_metrics_summary(processor_stop_metrics),
             "traffic": {
                 "phases": phase_results,
                 "total_impressions": total_impressions,
@@ -585,6 +586,23 @@ class ExperimentService:
             "timing": timing_metrics,
         }
         return metrics
+
+    def _build_processor_metrics_summary(
+        self,
+        processor_stop_metrics: JsonObject,
+    ) -> JsonObject:
+        summary: JsonObject = {}
+        for processor_name, payload in processor_stop_metrics.items():
+            if not isinstance(payload, dict):
+                continue
+            metrics = payload.get("metrics")
+            if not isinstance(metrics, dict):
+                continue
+            summary[processor_name] = {
+                "latest": metrics.get("latest"),
+                "records_count": metrics.get("count", 0),
+            }
+        return summary
 
     def _evaluate_success_gates(
         self,

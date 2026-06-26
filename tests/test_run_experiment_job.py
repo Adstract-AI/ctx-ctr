@@ -156,3 +156,28 @@ def test_full_system_local_experiment_resolves_to_standard_config_path() -> None
     path = run_experiment._experiment_config_path("full_system_local")
 
     assert str(path) == "experiments/configs/full_system_local.yaml"
+
+
+def test_parse_processor_metrics_reads_latest_realtime_ctr_record(tmp_path: Path) -> None:
+    log_path = tmp_path / "realtime_ctr.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                "INFO starting",
+                (
+                    "\x1b[36mINFO ctx_ctr.jobs.run_realtime_ctr: CTR_PROCESSOR_METRICS "
+                    '{"processed_events": 10, "events_per_second": 5.0}\x1b[0m'
+                ),
+                (
+                    "\x1b[36mINFO ctx_ctr.jobs.run_realtime_ctr: CTR_PROCESSOR_METRICS "
+                    '{"processed_events": 20, "events_per_second": 8.0}\x1b[0m'
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    metrics = run_experiment._parse_processor_metrics(log_path)
+
+    assert metrics["count"] == 2
+    assert metrics["latest"] == {"processed_events": 20, "events_per_second": 8.0}
