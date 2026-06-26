@@ -12,6 +12,7 @@ from ctx_ctr.models.job_configs import (
     ResetValuesJobConfig,
     RunWeightUpdateJobConfig,
     RunRealtimeCtrJobConfig,
+    RunStreamingWeightUpdateJobConfig,
     SeedValuesJobConfig,
 )
 
@@ -94,6 +95,7 @@ def test_default_job_configs_are_valid() -> None:
         ("configs/persist_redis_buckets.yaml", PersistRedisBucketsJobConfig),
         ("configs/produce_events.yaml", ProduceEventsJobConfig),
         ("configs/run_realtime_ctr.yaml", RunRealtimeCtrJobConfig),
+        ("configs/run_streaming_weight_update.yaml", RunStreamingWeightUpdateJobConfig),
         ("configs/run_weight_update.yaml", RunWeightUpdateJobConfig),
     ]
 

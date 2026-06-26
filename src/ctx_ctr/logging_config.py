@@ -34,6 +34,8 @@ class ColorFormatter(logging.Formatter):
         """Return the formatted log line wrapped in the configured color."""
 
         message = super().format(record)
+        if record.levelno >= logging.WARNING:
+            return f"{ERROR_COLOR}{message}{RESET_COLOR}"
         return f"{self._color}{message}{RESET_COLOR}"
 
 

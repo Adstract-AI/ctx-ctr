@@ -15,6 +15,7 @@ produce-events = "ctx_ctr.jobs.produce_events:main"
 reset-values = "ctx_ctr.jobs.reset_values:main"
 realtime-ctr = "ctx_ctr.jobs.run_realtime_ctr:main"
 seed-values = "ctx_ctr.jobs.seed_values:main"
+streaming-weight-update = "ctx_ctr.jobs.run_streaming_weight_update:main"
 watch-redis-values = "ctx_ctr.jobs.watch_redis_values:main"
 weight-update = "ctx_ctr.jobs.run_weight_update:main"
 

@@ -127,17 +127,17 @@ class WeightUpdateService:
             scan_result.buckets
         )
 
-        logger.info(
+        logger.debug(
             f"Weight update bucket scan: scanned={scan_result.scanned_key_count}, "
             f"valid={scan_result.valid_bucket_count}, invalid={scan_result.invalid_bucket_count}"
         )
-        logger.info(
+        logger.debug(
             "Single-feature buckets generated: "
             f"ad={len(feature_buckets[0])}, domain={len(feature_buckets[1])}, "
             f"context={len(feature_buckets[2])}, "
             f"invalid_triplets_for_features={invalid_feature_triplet_count}"
         )
-        logger.info(
+        logger.debug(
             f"Baseline update enabled={config.baseline_update}, "
             f"aggregate_impressions={baseline_proposal.aggregate_impressions}, "
             f"aggregate_clicks={baseline_proposal.aggregate_clicks}, "
@@ -274,7 +274,7 @@ class WeightUpdateService:
                 f"with PostgreSQL id {postgres_snapshot_id}"
             )
 
-        logger.info(
+        logger.debug(
             f"Weight update max absolute delta before centering: {max_absolute_weight_delta:.6f}"
         )
         return WeightUpdateResult(
