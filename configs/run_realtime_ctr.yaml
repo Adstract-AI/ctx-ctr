@@ -7,6 +7,7 @@ parallelism: 1
 checkpoint_interval_ms: 10000
 kafka_connector_jar: jars/flink-sql-connector-kafka-3.2.0-1.19.jar
 log_every: 10
+metrics_flush_interval_ms: 1000
 trust_z_score: 1.96
 trust_min_impressions: 100
 trust_max_variance: 0.0005

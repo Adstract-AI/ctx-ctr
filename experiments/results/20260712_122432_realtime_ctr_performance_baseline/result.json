@@ -1,0 +1,343 @@
+{
+  "artifact_uri": "experiments/results/20260712_122432_realtime_ctr_performance_baseline/result.json",
+  "config": {
+    "description": "Baseline throughput run for draining a preloaded Kafka backlog through realtime CTR.",
+    "experiment_name": "realtime_ctr_performance_baseline",
+    "processors": {
+      "realtime_ctr": {
+        "command": [
+          "{python}",
+          "-m",
+          "ctx_ctr.jobs.run_realtime_ctr",
+          "--consumer-group",
+          "ctx-ctr-exp-realtime-performance-baseline",
+          "--starting-offsets",
+          "earliest",
+          "--parallelism",
+          "1",
+          "--log-every",
+          "5000"
+        ],
+        "enabled": true,
+        "startup_seconds": 10.0,
+        "stop_timeout_seconds": 20.0
+      },
+      "streaming_weight_update": {
+        "command": [],
+        "enabled": false,
+        "startup_seconds": 8.0,
+        "stop_timeout_seconds": 15.0
+      }
+    },
+    "settle_seconds": 60.0,
+    "setup": {
+      "clean_topics": true,
+      "reset_values": true,
+      "seed_values": true
+    },
+    "success_gates": {
+      "max_invalid_redis_buckets": 0,
+      "require_model_snapshot_created": false,
+      "require_processor_health": true,
+      "require_redis_click_delta_match": false,
+      "require_redis_impression_delta_match": false
+    },
+    "tags": [
+      "local",
+      "performance",
+      "realtime-ctr",
+      "destructive",
+      "baseline"
+    ],
+    "traffic": {
+      "also_unified": false,
+      "enabled": true,
+      "log_every": 100,
+      "phases": [
+        {
+          "also_unified": false,
+          "events_per_second": 0.0,
+          "impressions": 50000,
+          "log_every": 5000,
+          "phase_name": "kafka_backlog",
+          "random_seed": 73001,
+          "settle_seconds": 0.0
+        }
+      ],
+      "preload_before_processors": true,
+      "random_seed": 42
+    }
+  },
+  "dry_run": false,
+  "duration_seconds": 75.107629,
+  "experiment_name": "realtime_ctr_performance_baseline",
+  "finished_at": "2026-07-12T12:25:47.679999Z",
+  "metrics": {
+    "processor_metrics": {
+      "realtime_ctr": {
+        "average": {
+          "clicks": 997.0,
+          "dead_letters": 0.0,
+          "elapsed_seconds": 11.379729726902125,
+          "events_per_second": 2432.508212695891,
+          "impressions": 28639.090909090908,
+          "processed_events": 29636.090909090908,
+          "valid_events": 29636.090909090908,
+          "window_events": 4636.090909090909,
+          "window_events_per_second": 2949.1628908542557,
+          "window_seconds": 1.727969666636041
+        },
+        "records": [
+          {
+            "clicks": 997,
+            "dead_letters": 0,
+            "elapsed_seconds": 3.9855589579965454,
+            "events_per_second": 1254.529177135393,
+            "impressions": 4003,
+            "processed_events": 5000,
+            "valid_events": 5000,
+            "window_events": 5000,
+            "window_events_per_second": 1254.529177135393,
+            "window_seconds": 3.9855589579965454
+          },
+          {
+            "clicks": 997,
+            "dead_letters": 0,
+            "elapsed_seconds": 5.507513791002566,
+            "events_per_second": 1815.7013090619314,
+            "impressions": 9003,
+            "processed_events": 10000,
+            "valid_events": 10000,
+            "window_events": 5000,
+            "window_events_per_second": 3285.248610252431,
+            "window_seconds": 1.5219548330060206
+          },
+          {
+            "clicks": 997,
+            "dead_letters": 0,
+            "elapsed_seconds": 6.920727332995739,
+            "events_per_second": 2167.402250986679,
+            "impressions": 14003,
+            "processed_events": 15000,
+            "valid_events": 15000,
+            "window_events": 5000,
+            "window_events_per_second": 3538.035725972512,
+            "window_seconds": 1.4132135419931728
+          },
+          {
+            "clicks": 997,
+            "dead_letters": 0,
+            "elapsed_seconds": 8.28447795799002,
+            "events_per_second": 2414.1533240137196,
+            "impressions": 19003,
+            "processed_events": 20000,
+            "valid_events": 20000,
+            "window_events": 5000,
+            "window_events_per_second": 3666.3594563125976,
+            "window_seconds": 1.3637506249942817
+          },
+          {
+            "clicks": 997,
+            "dead_letters": 0,
+            "elapsed_seconds": 10.000204707990633,
+            "events_per_second": 2499.948824049954,
+            "impressions": 24003,
+            "processed_events": 25000,
+            "valid_events": 25000,
+            "window_events": 5000,
+            "window_events_per_second": 2914.2169637433317,
+            "window_seconds": 1.7157267500006128
+          },
+          {
+            "clicks": 997,
+            "dead_letters": 0,
+            "elapsed_seconds": 11.469675582979107,
+            "events_per_second": 2615.592723870911,
+            "impressions": 29003,
+            "processed_events": 30000,
+            "valid_events": 30000,
+            "window_events": 5000,
+            "window_events_per_second": 3402.585301351562,
+            "window_seconds": 1.469470874988474
+          },
+          {
+            "clicks": 997,
+            "dead_letters": 0,
+            "elapsed_seconds": 12.81842595798662,
+            "events_per_second": 2730.444448851614,
+            "impressions": 34003,
+            "processed_events": 35000,
+            "valid_events": 35000,
+            "window_events": 5000,
+            "window_events_per_second": 3707.135206521927,
+            "window_seconds": 1.348750375007512
+          },
+          {
+            "clicks": 997,
+            "dead_letters": 0,
+            "elapsed_seconds": 14.175460750004277,
+            "events_per_second": 2821.7777683161326,
+            "impressions": 39003,
+            "processed_events": 40000,
+            "valid_events": 40000,
+            "window_events": 5000,
+            "window_events_per_second": 3684.5039120669367,
+            "window_seconds": 1.3570347920176573
+          },
+          {
+            "clicks": 997,
+            "dead_letters": 0,
+            "elapsed_seconds": 15.707973082986427,
+            "events_per_second": 2864.787185607051,
+            "impressions": 44003,
+            "processed_events": 45000,
+            "valid_events": 45000,
+            "window_events": 5000,
+            "window_events_per_second": 3262.6164843126485,
+            "window_seconds": 1.5325123329821508
+          },
+          {
+            "clicks": 997,
+            "dead_letters": 0,
+            "elapsed_seconds": 17.299342540994985,
+            "events_per_second": 2890.2832510260364,
+            "impressions": 49003,
+            "processed_events": 50000,
+            "valid_events": 50000,
+            "window_events": 5000,
+            "window_events_per_second": 3141.9479460520806,
+            "window_seconds": 1.5913694580085576
+          },
+          {
+            "clicks": 997,
+            "dead_letters": 0,
+            "elapsed_seconds": 19.00766633299645,
+            "events_per_second": 2682.9700767353806,
+            "impressions": 50000,
+            "processed_events": 50997,
+            "valid_events": 50997,
+            "window_events": 997,
+            "window_events_per_second": 583.6130156753942,
+            "window_seconds": 1.7083237920014653
+          }
+        ]
+      }
+    },
+    "producer": {
+      "clicks": 997,
+      "impressions": 50000,
+      "total_events": 50997
+    },
+    "statistics": {
+      "after": {
+        "current_model_baseline_ctr": 0.02,
+        "current_model_snapshot_name": "seed_values_v1",
+        "postgres_experiment_result_count": 1,
+        "postgres_model_snapshot_count": 1,
+        "redis_average_ci_width": 0.017979827574576012,
+        "redis_bucket_keys_scanned": 100,
+        "redis_invalid_bucket_count": 0,
+        "redis_max_ci_width": 0.02438342297437472,
+        "redis_total_clicks": 1574,
+        "redis_total_impressions": 79750,
+        "redis_trusted_bucket_count": 100,
+        "redis_valid_bucket_count": 100
+      },
+      "before": {
+        "current_model_baseline_ctr": 0.02,
+        "current_model_snapshot_name": "seed_values_v1",
+        "postgres_experiment_result_count": 1,
+        "postgres_model_snapshot_count": 1,
+        "redis_average_ci_width": 0.028036064337364844,
+        "redis_bucket_keys_scanned": 100,
+        "redis_invalid_bucket_count": 0,
+        "redis_max_ci_width": 0.04269055025614267,
+        "redis_total_clicks": 577,
+        "redis_total_impressions": 29750,
+        "redis_trusted_bucket_count": 100,
+        "redis_valid_bucket_count": 100
+      },
+      "delta": {
+        "postgres_experiment_result_count": 0,
+        "postgres_model_snapshot_count": 0,
+        "redis_total_clicks": 997,
+        "redis_total_impressions": 50000,
+        "redis_trusted_bucket_count": 0,
+        "redis_valid_bucket_count": 0
+      }
+    },
+    "success_gates": {
+      "failures": [],
+      "max_invalid_redis_buckets": 0,
+      "model_snapshot_delta": 0,
+      "passed": true,
+      "produced_clicks": 997,
+      "produced_impressions": 50000,
+      "redis_click_delta": 997,
+      "redis_impression_delta": 50000
+    },
+    "timing": {
+      "final_settle_seconds": 60.00214504200267,
+      "processors": {
+        "start_seconds": 0.0033540420117788017,
+        "startup_wait_seconds": 10.003083290997893
+      },
+      "setup": {
+        "clean_topics_seconds": 2.4055417079944164,
+        "reset_values_seconds": 0.07024308299878612,
+        "seed_values_seconds": 0.029695334000280127,
+        "total_seconds": 2.505835374991875
+      },
+      "snapshots": {
+        "before_seconds": 0.0325766250025481,
+        "final_seconds": 0.03837020799983293
+      },
+      "teardown": {
+        "processor_stop_seconds": 0.17591429100139067
+      },
+      "total_seconds": 75.1074018329964,
+      "validation": {
+        "seconds": 5.51670091226697e-05
+      }
+    },
+    "traffic": {
+      "phases": [
+        {
+          "phase_name": "kafka_backlog",
+          "producer": {
+            "clicks": 997,
+            "impressions": 50000,
+            "total_events": 50997
+          },
+          "snapshot": {
+            "current_model_baseline_ctr": 0.02,
+            "current_model_snapshot_name": "seed_values_v1",
+            "postgres_experiment_result_count": 1,
+            "postgres_model_snapshot_count": 1,
+            "redis_average_ci_width": 0.028036064337364844,
+            "redis_bucket_keys_scanned": 100,
+            "redis_invalid_bucket_count": 0,
+            "redis_max_ci_width": 0.04269055025614267,
+            "redis_total_clicks": 577,
+            "redis_total_impressions": 29750,
+            "redis_trusted_bucket_count": 100,
+            "redis_valid_bucket_count": 100
+          },
+          "timing": {
+            "observed_events_per_second": 21999.313883058283,
+            "observed_impressions_per_second": 21569.223565168817,
+            "produce_seconds": 2.3181177499936894,
+            "settle_seconds": 0.0,
+            "snapshot_seconds": 0.02726433300995268,
+            "total_seconds": 2.34538541699294
+          }
+        }
+      ],
+      "total_clicks": 997,
+      "total_events": 50997,
+      "total_impressions": 50000
+    }
+  },
+  "postgres_experiment_id": 2,
+  "started_at": "2026-07-12T12:24:32.572370Z"
+}

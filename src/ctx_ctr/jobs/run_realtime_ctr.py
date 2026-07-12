@@ -63,6 +63,12 @@ def main() -> None:
         default=None,
         help="log progress every N valid events; use 0 to disable progress logs",
     )
+    parser.add_argument(
+        "--metrics-flush-interval-ms",
+        type=int,
+        default=None,
+        help="flush partial processor metrics after this interval; use 0 to disable",
+    )
     parser.add_argument("--trust-z-score", type=float, default=None)
     parser.add_argument("--trust-min-impressions", type=int, default=None)
     parser.add_argument("--trust-max-variance", type=float, default=None)
@@ -81,6 +87,7 @@ def main() -> None:
         f"trust_min_impressions={config.trust_min_impressions}, "
         f"trust_max_variance={config.trust_max_variance}, "
         f"trust_max_ci_width={config.trust_max_ci_width}, "
+        f"metrics_flush_interval_ms={config.metrics_flush_interval_ms}, "
         f"config={args.config}"
     )
 
@@ -120,9 +127,15 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
     class RedisCtrProcessFunction(KeyedProcessFunction):  # type: ignore[misc]
         """Process keyed CTR events and write valid bucket updates to Redis."""
 
-        def __init__(self, redis_url: str, log_every: int) -> None:
+        def __init__(
+            self,
+            redis_url: str,
+            log_every: int,
+            metrics_flush_interval_ms: int,
+        ) -> None:
             self._redis_url = redis_url
             self._log_every = log_every
+            self._metrics_flush_interval_ms = metrics_flush_interval_ms
             self._trust_thresholds = CtrTrustThresholds(
                 z_score=config.trust_z_score,
                 min_impressions=config.trust_min_impressions,
@@ -139,7 +152,9 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
             self._dead_letters = 0
             self._started_monotonic = time.perf_counter()
             self._last_log_monotonic = self._started_monotonic
+            self._last_event_monotonic = self._started_monotonic
             self._last_log_processed_events = 0
+            self._metrics_timer_timestamp: int | None = None
 
         def open(self, runtime_context: Any) -> None:
             """Initialize Redis-backed model state and keyed Flink state."""
@@ -161,7 +176,8 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
         ) -> Any:
             """Apply one raw Kafka record to CTR state or emit a dead-letter payload."""
 
-            del runtime_context
+            self._last_event_monotonic = time.perf_counter()
+            self._ensure_metrics_timer(runtime_context)
             try:
                 event = CtrEvent.model_validate_json(value)
             except ValidationError:
@@ -196,6 +212,21 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
             elif event.event_type == "click":
                 self._clicks += 1
             self._log_metrics()
+
+        def on_timer(self, timestamp: int, runtime_context: Any) -> Iterator[str]:
+            """Flush a partial metrics window after processing activity."""
+
+            if timestamp != self._metrics_timer_timestamp:
+                return
+            self._metrics_timer_timestamp = None
+            has_unlogged_events = self._processed_events != self._last_log_processed_events
+            idle_seconds = time.perf_counter() - self._last_event_monotonic
+            flush_interval_seconds = self._metrics_flush_interval_ms / 1000
+            if has_unlogged_events and idle_seconds >= flush_interval_seconds:
+                self._log_metrics(force=True)
+            elif has_unlogged_events:
+                self._ensure_metrics_timer(runtime_context)
+            yield from ()
 
         def close(self) -> None:
             """Close Redis resources."""
@@ -232,6 +263,16 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
 
         def _should_log_progress(self) -> bool:
             return self._log_every > 0 and self._processed_events % self._log_every == 0
+
+        def _ensure_metrics_timer(self, runtime_context: Any) -> None:
+            if self._metrics_flush_interval_ms <= 0 or self._metrics_timer_timestamp is not None:
+                return
+            timer_service = runtime_context.timer_service()
+            timestamp = (
+                timer_service.current_processing_time() + self._metrics_flush_interval_ms
+            )
+            timer_service.register_processing_time_timer(timestamp)
+            self._metrics_timer_timestamp = timestamp
 
         def _log_metrics(self, *, force: bool = False) -> None:
             if not force and not self._should_log_progress():
@@ -311,7 +352,11 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
     )
     events = env.from_source(source, WatermarkStrategy.no_watermarks(), "ctr-events")
     dead_letters = events.key_by(_raw_event_bucket_key, key_type=Types.STRING()).process(
-        RedisCtrProcessFunction(REDIS_URL, config.log_every),
+        RedisCtrProcessFunction(
+            REDIS_URL,
+            config.log_every,
+            config.metrics_flush_interval_ms,
+        ),
         output_type=Types.STRING(),
     )
     dead_letters.sink_to(dead_letter_sink).name("dead-letter-sink")
@@ -333,6 +378,7 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
         "checkpoint_interval_ms",
         "kafka_connector_jar",
         "log_every",
+        "metrics_flush_interval_ms",
         "trust_z_score",
         "trust_min_impressions",
         "trust_max_variance",

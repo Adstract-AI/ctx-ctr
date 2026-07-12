@@ -10,6 +10,7 @@ from ctx_ctr.constants import (
     DEFAULT_CTR_TRUST_MIN_IMPRESSIONS,
     DEFAULT_CTR_TRUST_Z_SCORE,
     DEFAULT_CTR_KAFKA_STARTING_OFFSETS,
+    DEFAULT_CTR_METRICS_FLUSH_INTERVAL_MS,
     DEFAULT_FLINK_KAFKA_CONNECTOR_JAR,
     DEFAULT_WEIGHT_UPDATE_BASELINE_MAX_CI_WIDTH,
     DEFAULT_WEIGHT_UPDATE_EVIDENCE_SMOOTHING,
@@ -105,6 +106,10 @@ class RunRealtimeCtrJobConfig(BaseModel):
     checkpoint_interval_ms: int = Field(default=10000, ge=0)
     kafka_connector_jar: str = DEFAULT_FLINK_KAFKA_CONNECTOR_JAR
     log_every: int = Field(default=100, ge=0)
+    metrics_flush_interval_ms: int = Field(
+        default=DEFAULT_CTR_METRICS_FLUSH_INTERVAL_MS,
+        ge=0,
+    )
     trust_z_score: float = Field(default=DEFAULT_CTR_TRUST_Z_SCORE, gt=0)
     trust_min_impressions: int = Field(default=DEFAULT_CTR_TRUST_MIN_IMPRESSIONS, ge=0)
     trust_max_variance: float = Field(default=DEFAULT_CTR_TRUST_MAX_VARIANCE, gt=0)

@@ -71,6 +71,8 @@ python -m ctx_ctr.jobs.seed_values
   Defaults to the project `jars/` folder through the YAML config.
 - `--log-every <int>`: Log progress every N valid events. Use `0` to disable
   progress logs.
+- `--metrics-flush-interval-ms <int>`: Flush a partial processor metrics window
+  after activity. Defaults to `1000`; use `0` to disable.
 - `--trust-z-score <float>`: Z-score used for bucket confidence intervals.
 - `--trust-min-impressions <int>`: Minimum bucket impressions required for the
   bucket `trusted` flag.
@@ -93,6 +95,8 @@ CLI flags override values from the YAML config.
   are resolved from the project root. Defaults to
   `jars/flink-sql-connector-kafka-3.2.0-1.19.jar`.
 - `log_every`: Progress logging interval.
+- `metrics_flush_interval_ms`: Processing-time interval used to record partial
+  metrics batches that do not reach `log_every`.
 - `trust_z_score`: Z-score used for bucket confidence intervals.
 - `trust_min_impressions`: Minimum bucket impressions required for `trusted`.
 - `trust_max_variance`: Maximum bucket posterior variance allowed for
