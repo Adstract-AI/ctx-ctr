@@ -20,6 +20,7 @@ class ExperimentTrafficConfig(BaseModel):
     random_seed: int = 42
     log_every: int = Field(default=100, ge=0)
     also_unified: bool = False
+    preload_before_processors: bool = False
     phases: list["ExperimentTrafficPhase"] = Field(default_factory=list)
 
     model_config = ConfigDict(frozen=True)

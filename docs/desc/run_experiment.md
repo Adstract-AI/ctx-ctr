@@ -27,6 +27,11 @@ Redis/Postgres state, cleans CTR Kafka topics, seeds deterministic values, start
 traffic, verifies strict success gates, captures processor logs, writes artifacts,
 and inserts one row into `ctr_experiment_results`.
 
+`realtime_ctr_performance_baseline` isolates realtime CTR throughput. It first
+produces an unthrottled 50,000-impression Kafka backlog, then starts only the
+realtime CTR processor from the earliest offsets and measures how quickly that
+backlog is processed.
+
 ## When To Use It
 
 Use this when you want a repeatable run that answers:
@@ -48,6 +53,8 @@ Traffic configs support two shapes:
 - single-phase experiments define `impressions` and `events_per_second`
 - phased experiments define `phases`; the single-phase fallback fields should be
   omitted
+- performance experiments can set `preload_before_processors: true` to publish
+  all configured phases before processor subprocesses start
 
 ## Default Config
 
@@ -134,6 +141,17 @@ Run the full-system local experiment:
 ```bash
 run-experiment --experiment full_system_local
 ```
+
+Run the realtime CTR throughput baseline:
+
+```bash
+run-experiment --experiment realtime_ctr_performance_baseline
+```
+
+This experiment is destructive for local CTR state and Kafka topics. Its target
+is at least 3,000 processed events/second; the baseline records the observed
+average without failing solely because the initial implementation is below that
+target.
 
 Use another experiment definition:
 

@@ -1,0 +1,49 @@
+experiment_name: realtime_ctr_performance_baseline
+description: Baseline throughput run for draining a preloaded Kafka backlog through realtime CTR.
+settle_seconds: 60
+tags:
+  - local
+  - performance
+  - realtime-ctr
+  - destructive
+  - baseline
+setup:
+  reset_values: true
+  clean_topics: true
+  seed_values: true
+processors:
+  realtime_ctr:
+    enabled: true
+    command:
+      - "{python}"
+      - "-m"
+      - "ctx_ctr.jobs.run_realtime_ctr"
+      - "--consumer-group"
+      - "ctx-ctr-exp-realtime-performance-baseline"
+      - "--starting-offsets"
+      - "earliest"
+      - "--parallelism"
+      - "1"
+      - "--log-every"
+      - "5000"
+    startup_seconds: 10
+    stop_timeout_seconds: 20
+  streaming_weight_update:
+    enabled: false
+traffic:
+  enabled: true
+  preload_before_processors: true
+  phases:
+    - phase_name: kafka_backlog
+      impressions: 50000
+      events_per_second: 0
+      random_seed: 73001
+      settle_seconds: 0
+      log_every: 5000
+      also_unified: false
+success_gates:
+  require_processor_health: true
+  require_redis_impression_delta_match: false
+  require_redis_click_delta_match: false
+  require_model_snapshot_created: false
+  max_invalid_redis_buckets: 0

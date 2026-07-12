@@ -62,6 +62,8 @@ python -m ctx_ctr.jobs.seed_values
   `ctr.dead-letter`.
 - `--consumer-group <name>`: Kafka consumer group. Defaults to
   `ctx-ctr-flink-realtime`.
+- `--starting-offsets <latest|earliest>`: Offset policy used when starting the
+  source. Defaults to `latest`; backlog experiments use `earliest`.
 - `--parallelism <int>`: PyFlink parallelism. Defaults to `1`.
 - `--checkpoint-interval-ms <int>`: Checkpoint interval. Defaults to `10000`.
   Use `0` to disable checkpointing.
@@ -83,6 +85,8 @@ CLI flags override values from the YAML config.
 
 - `impression_topic`, `click_topic`, `dead_letter_topic`: Kafka topics.
 - `consumer_group`: Kafka consumer group.
+- `starting_offsets`: `latest` for newly arriving traffic or `earliest` to
+  consume records already present in Kafka.
 - `parallelism`: PyFlink parallelism.
 - `checkpoint_interval_ms`: Flink checkpoint interval. Use `0` to disable.
 - `kafka_connector_jar`: Local Flink Kafka connector jar path. Relative paths
@@ -184,5 +188,5 @@ See `docs/development_setup.md` for the download command. Use
 `--kafka-connector-jar` only when using a different connector location.
 
 For local development, start this job before running `produce_events` so the
-Kafka consumer begins from the latest offsets and receives newly produced
+By default, the Kafka consumer begins from the latest offsets and receives newly produced
 events.

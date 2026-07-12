@@ -9,6 +9,7 @@ from ctx_ctr.constants import (
     DEFAULT_CTR_TRUST_MAX_VARIANCE,
     DEFAULT_CTR_TRUST_MIN_IMPRESSIONS,
     DEFAULT_CTR_TRUST_Z_SCORE,
+    DEFAULT_CTR_KAFKA_STARTING_OFFSETS,
     DEFAULT_FLINK_KAFKA_CONNECTOR_JAR,
     DEFAULT_WEIGHT_UPDATE_BASELINE_MAX_CI_WIDTH,
     DEFAULT_WEIGHT_UPDATE_EVIDENCE_SMOOTHING,
@@ -96,6 +97,10 @@ class RunRealtimeCtrJobConfig(BaseModel):
     click_topic: str = CLICK_TOPIC
     dead_letter_topic: str = DEAD_LETTER_TOPIC
     consumer_group: str = "ctx-ctr-flink-realtime"
+    starting_offsets: str = Field(
+        default=DEFAULT_CTR_KAFKA_STARTING_OFFSETS,
+        pattern="^(earliest|latest)$",
+    )
     parallelism: int = Field(default=1, gt=0)
     checkpoint_interval_ms: int = Field(default=10000, ge=0)
     kafka_connector_jar: str = DEFAULT_FLINK_KAFKA_CONNECTOR_JAR

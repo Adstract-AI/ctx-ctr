@@ -100,6 +100,17 @@ class FakePublisher:
         self.flushed = True
 
 
+class PreloadRecordingPublisher(FakePublisher):
+    def __init__(self, processor_manager: "RecordingProcessorManager") -> None:
+        super().__init__()
+        self._processor_manager = processor_manager
+        self.published_before_processor_start = True
+
+    def publish(self, event: object, *, also_unified: bool) -> None:
+        self.published_before_processor_start &= not self._processor_manager.started
+        super().publish(event, also_unified=also_unified)
+
+
 class RecordingSetupRunner:
     def __init__(self) -> None:
         self.calls: list[str] = []
@@ -327,6 +338,45 @@ def test_full_experiment_runs_setup_processors_phases_and_strict_gates(
     assert realtime_metrics["average"]["processed_events"] == 8.0
     assert realtime_metrics["average"]["events_per_second"] == 4.0
     assert postgres_store.inserted
+
+
+def test_preload_traffic_is_published_before_processors_start(tmp_path: Path) -> None:
+    processor_manager = RecordingProcessorManager()
+    publisher = PreloadRecordingPublisher(processor_manager)
+    service = ExperimentService(
+        redis_reader=SequenceRedisReader(
+            impressions=[100, 100, 101, 101],
+            clicks=[2, 2, 2, 2],
+        ),
+        postgres_store=SequencePostgresStore(model_counts=[1, 1, 1, 1]),
+        artifact_writer=ExperimentArtifactWriter(str(tmp_path)),
+        publisher=publisher,
+        setup_runner=RecordingSetupRunner(),
+        processor_manager=processor_manager,
+    )
+    definition = _strict_definition(
+        phases=[
+            ExperimentTrafficPhase(
+                phase_name="backlog",
+                impressions=1,
+                events_per_second=0,
+                random_seed=42,
+                settle_seconds=0,
+                log_every=0,
+            )
+        ]
+    ).model_copy(
+        update={
+            "traffic": _strict_definition().traffic.model_copy(
+                update={"preload_before_processors": True}
+            )
+        }
+    )
+
+    service.run(definition, dry_run=False)
+
+    assert publisher.published > 0
+    assert publisher.published_before_processor_start is True
 
 
 def test_full_experiment_records_failed_strict_gate_without_losing_artifact(

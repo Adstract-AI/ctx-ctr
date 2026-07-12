@@ -194,6 +194,9 @@ class ExperimentService:
             cast(dict[str, JsonValue], timing_metrics["snapshots"])["before_seconds"] = (
                 time.perf_counter() - before_snapshot_start
             )
+            if definition.traffic.preload_before_processors:
+                logger.info("Preloading Kafka traffic before starting processors")
+                phase_results = self._run_traffic_phases(definition, dry_run=dry_run)
             if not dry_run:
                 processor_start = time.perf_counter()
                 processor_start_metrics = self._processor_manager.start_processors(
@@ -217,7 +220,8 @@ class ExperimentService:
                         "startup_wait_seconds"
                     ] = 0.0
                 self._processor_manager.assert_healthy()
-            phase_results = self._run_traffic_phases(definition, dry_run=dry_run)
+            if not definition.traffic.preload_before_processors:
+                phase_results = self._run_traffic_phases(definition, dry_run=dry_run)
             if definition.settle_seconds > 0 and not dry_run:
                 logger.info(f"Waiting {definition.settle_seconds} seconds for final settle")
                 final_settle_start = time.perf_counter()

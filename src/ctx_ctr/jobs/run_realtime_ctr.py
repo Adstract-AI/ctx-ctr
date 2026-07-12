@@ -44,6 +44,12 @@ def main() -> None:
     parser.add_argument("--click-topic", default=None)
     parser.add_argument("--dead-letter-topic", default=None)
     parser.add_argument("--consumer-group", default=None)
+    parser.add_argument(
+        "--starting-offsets",
+        choices=("earliest", "latest"),
+        default=None,
+        help="Kafka offsets used when the consumer group has no committed offsets",
+    )
     parser.add_argument("--parallelism", type=int, default=None)
     parser.add_argument("--checkpoint-interval-ms", type=int, default=None)
     parser.add_argument(
@@ -70,6 +76,7 @@ def main() -> None:
         "Configured realtime CTR job: "
         f"impression_topic={config.impression_topic}, click_topic={config.click_topic}, "
         f"dead_letter_topic={config.dead_letter_topic}, consumer_group={config.consumer_group}, "
+        f"starting_offsets={config.starting_offsets}, "
         f"parallelism={config.parallelism}, checkpoint_interval_ms={config.checkpoint_interval_ms}, "
         f"trust_min_impressions={config.trust_min_impressions}, "
         f"trust_max_variance={config.trust_max_variance}, "
@@ -271,12 +278,17 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
     if config.checkpoint_interval_ms > 0:
         env.enable_checkpointing(config.checkpoint_interval_ms)
 
+    starting_offsets = (
+        KafkaOffsetsInitializer.earliest()
+        if config.starting_offsets == "earliest"
+        else KafkaOffsetsInitializer.latest()
+    )
     source = (
         KafkaSource.builder()
         .set_bootstrap_servers(KAFKA_BOOTSTRAP_SERVERS)
         .set_group_id(config.consumer_group)
         .set_topics(config.impression_topic, config.click_topic)
-        .set_starting_offsets(KafkaOffsetsInitializer.latest())
+        .set_starting_offsets(starting_offsets)
         .set_value_only_deserializer(SimpleStringSchema())
         .build()
     )
@@ -316,6 +328,7 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
         "click_topic",
         "dead_letter_topic",
         "consumer_group",
+        "starting_offsets",
         "parallelism",
         "checkpoint_interval_ms",
         "kafka_connector_jar",
