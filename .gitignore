@@ -11,4 +11,6 @@ build/
 *.egg-info/
 data/
 logs/
+experiments/results/*
+!experiments/results/.gitkeep
 .idea/
