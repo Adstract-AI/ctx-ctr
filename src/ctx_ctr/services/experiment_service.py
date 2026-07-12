@@ -181,7 +181,6 @@ class ExperimentService:
         timing_metrics: JsonObject = {
             "setup": {},
             "processors": {},
-            "traffic": {},
             "snapshots": {},
             "validation": {},
             "teardown": {},
@@ -219,7 +218,6 @@ class ExperimentService:
                     ] = 0.0
                 self._processor_manager.assert_healthy()
             phase_results = self._run_traffic_phases(definition, dry_run=dry_run)
-            timing_metrics["traffic"] = self._traffic_timing(phase_results)
             if definition.settle_seconds > 0 and not dry_run:
                 logger.info(f"Waiting {definition.settle_seconds} seconds for final settle")
                 final_settle_start = time.perf_counter()
@@ -275,8 +273,6 @@ class ExperimentService:
             before=before_metrics_snapshot,
             after=after_snapshot,
             phase_results=phase_results,
-            setup_metrics=setup_metrics,
-            processor_start_metrics=processor_start_metrics,
             processor_stop_metrics=processor_stop_metrics,
             gate_metrics=gate_metrics,
             timing_metrics=timing_metrics,
@@ -366,7 +362,10 @@ class ExperimentService:
             phase_results.append(
                 {
                     "phase_name": phase.phase_name,
-                    "producer": cast(JsonObject, producer_result.model_dump(mode="json")),
+                    "producer": cast(
+                        JsonObject,
+                        producer_result.model_dump(mode="json", exclude={"dry_run"}),
+                    ),
                     "snapshot": cast(JsonObject, snapshot.model_dump(mode="json")),
                     "timing": {
                         "produce_seconds": produce_seconds,
@@ -387,54 +386,6 @@ class ExperimentService:
                 }
             )
         return phase_results
-
-    def _traffic_timing(self, phase_results: list[JsonObject]) -> JsonObject:
-        phase_timings = [
-            {
-                "phase_name": phase["phase_name"],
-                **cast(JsonObject, phase["timing"]),
-            }
-            for phase in phase_results
-        ]
-        total_produce_seconds = sum(
-            float(cast(JsonObject, phase["timing"])["produce_seconds"])
-            for phase in phase_results
-        )
-        total_settle_seconds = sum(
-            float(cast(JsonObject, phase["timing"])["settle_seconds"])
-            for phase in phase_results
-        )
-        total_snapshot_seconds = sum(
-            float(cast(JsonObject, phase["timing"])["snapshot_seconds"])
-            for phase in phase_results
-        )
-        total_phase_seconds = sum(
-            float(cast(JsonObject, phase["timing"])["total_seconds"])
-            for phase in phase_results
-        )
-        total_events = sum(
-            int(cast(JsonObject, phase["producer"])["total_events"])
-            for phase in phase_results
-        )
-        total_impressions = sum(
-            int(cast(JsonObject, phase["producer"])["impressions"])
-            for phase in phase_results
-        )
-        return {
-            "phases": phase_timings,
-            "produce_seconds": total_produce_seconds,
-            "settle_seconds": total_settle_seconds,
-            "snapshot_seconds": total_snapshot_seconds,
-            "phase_total_seconds": total_phase_seconds,
-            "observed_events_per_second": (
-                total_events / total_produce_seconds if total_produce_seconds > 0 else 0.0
-            ),
-            "observed_impressions_per_second": (
-                total_impressions / total_produce_seconds
-                if total_produce_seconds > 0
-                else 0.0
-            ),
-        }
 
     def _produce_phase(self, phase: ExperimentTrafficPhase, *, dry_run: bool) -> EventProducerResult:
         run_config = EventProducerRunConfig(
@@ -524,8 +475,6 @@ class ExperimentService:
         before: ExperimentRuntimeSnapshot,
         after: ExperimentRuntimeSnapshot,
         phase_results: list[JsonObject],
-        setup_metrics: JsonObject,
-        processor_start_metrics: JsonObject,
         processor_stop_metrics: JsonObject,
         gate_metrics: JsonObject,
         timing_metrics: JsonObject,
@@ -545,12 +494,7 @@ class ExperimentService:
             for phase in phase_results
         )
         metrics: dict[str, JsonValue] = {
-            "setup": setup_metrics,
-            "processors": {
-                "started": processor_start_metrics,
-                "stopped": processor_stop_metrics,
-            },
-            "processor_metrics": self._build_processor_metrics_summary(processor_stop_metrics),
+            "processor_metrics": self._build_processor_metrics(processor_stop_metrics),
             "traffic": {
                 "phases": phase_results,
                 "total_impressions": total_impressions,
@@ -558,56 +502,73 @@ class ExperimentService:
                 "total_events": total_events,
             },
             "producer": {
-                "dry_run": all(
-                    bool(cast(JsonObject, phase["producer"])["dry_run"])
-                    for phase in phase_results
-                ) if phase_results else False,
                 "impressions": total_impressions,
                 "clicks": total_clicks,
                 "total_events": total_events,
             },
-            "before": before_payload,
-            "after": after_payload,
-            "delta": {
-                "redis_total_impressions": (
-                    after.redis_total_impressions - before.redis_total_impressions
-                ),
-                "redis_total_clicks": after.redis_total_clicks - before.redis_total_clicks,
-                "redis_valid_bucket_count": (
-                    after.redis_valid_bucket_count - before.redis_valid_bucket_count
-                ),
-                "redis_trusted_bucket_count": (
-                    after.redis_trusted_bucket_count - before.redis_trusted_bucket_count
-                ),
-                "postgres_model_snapshot_count": (
-                    after.postgres_model_snapshot_count - before.postgres_model_snapshot_count
-                ),
-                "postgres_experiment_result_count": (
-                    after.postgres_experiment_result_count
-                    - before.postgres_experiment_result_count
-                ),
+            "statistics": {
+                "before": before_payload,
+                "after": after_payload,
+                "delta": {
+                    "redis_total_impressions": (
+                        after.redis_total_impressions - before.redis_total_impressions
+                    ),
+                    "redis_total_clicks": after.redis_total_clicks - before.redis_total_clicks,
+                    "redis_valid_bucket_count": (
+                        after.redis_valid_bucket_count - before.redis_valid_bucket_count
+                    ),
+                    "redis_trusted_bucket_count": (
+                        after.redis_trusted_bucket_count - before.redis_trusted_bucket_count
+                    ),
+                    "postgres_model_snapshot_count": (
+                        after.postgres_model_snapshot_count - before.postgres_model_snapshot_count
+                    ),
+                    "postgres_experiment_result_count": (
+                        after.postgres_experiment_result_count
+                        - before.postgres_experiment_result_count
+                    ),
+                },
             },
             "success_gates": gate_metrics,
             "timing": timing_metrics,
         }
         return metrics
 
-    def _build_processor_metrics_summary(
+    def _build_processor_metrics(
         self,
         processor_stop_metrics: JsonObject,
     ) -> JsonObject:
-        summary: JsonObject = {}
+        processor_metrics: JsonObject = {}
         for processor_name, payload in processor_stop_metrics.items():
             if not isinstance(payload, dict):
                 continue
             metrics = payload.get("metrics")
             if not isinstance(metrics, dict):
                 continue
-            summary[processor_name] = {
-                "latest": metrics.get("latest"),
-                "records_count": metrics.get("count", 0),
-            }
-        return summary
+            raw_records = metrics.get("records")
+            records = (
+                [record for record in raw_records if isinstance(record, dict)]
+                if isinstance(raw_records, list)
+                else []
+            )
+            result: JsonObject = {"records": cast(list[JsonValue], records)}
+            if records:
+                result["average"] = self._average_processor_records(records)
+            processor_metrics[processor_name] = result
+        return processor_metrics
+
+    def _average_processor_records(self, records: list[dict[str, object]]) -> JsonObject:
+        numeric_values: dict[str, list[float]] = {}
+        for record in records:
+            for key, value in record.items():
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    continue
+                numeric_values.setdefault(key, []).append(float(value))
+        return {
+            key: sum(values) / len(values)
+            for key, values in numeric_values.items()
+            if values
+        }
 
     def _evaluate_success_gates(
         self,

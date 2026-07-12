@@ -162,11 +162,13 @@ For `full_system_local`, success gates fail the command after artifacts and the
 Postgres experiment result are written. Check the artifact directory for
 `result.json`, `result.md`, and processor logs.
 
-The JSON artifact includes detailed timings for setup, processor startup,
-startup wait, each traffic phase, phase settle waits, Redis/Postgres snapshot
-collection, validation, processor teardown, and total orchestration time.
+The JSON artifact stores Redis/Postgres `before`, `after`, and `delta` values
+under `metrics.statistics`. Detailed phase timings live with each entry under
+`metrics.traffic.phases`; orchestration timings remain under `metrics.timing`.
 
 The producer throughput metrics measure how fast the experiment sent events to
 Kafka. Realtime CTR consumer throughput is parsed separately from
 `CTR_PROCESSOR_METRICS` records emitted by the `realtime-ctr` subprocess and is
-stored under `processor_metrics.realtime_ctr`.
+stored under `metrics.processor_metrics.realtime_ctr`. That object contains all
+parsed records and the average of each numeric metric; processor commands, PIDs,
+timestamps, and stop metadata are not included in experiment metrics.

@@ -311,14 +311,16 @@ def _build_publisher(
 def _result_lines(result: ExperimentRunResult) -> list[str]:
     metrics = result.metrics
     producer = metrics["producer"]
-    before = metrics["before"]
-    after = metrics["after"]
-    delta = metrics["delta"]
+    statistics = metrics["statistics"]
+    before = _metric_value(statistics, "before")
+    after = _metric_value(statistics, "after")
+    delta = _metric_value(statistics, "delta")
     success_gates = metrics.get("success_gates", {})
     timing = metrics.get("timing", {})
-    traffic_timing = _metric_value(timing, "traffic")
+    traffic = metrics.get("traffic", {})
+    traffic_timing = _aggregate_traffic_timing(traffic)
     teardown_timing = _metric_value(timing, "teardown")
-    realtime_metrics = _processor_latest_metrics(metrics, "realtime_ctr")
+    realtime_metrics = _processor_average_metrics(metrics, "realtime_ctr")
     return [
         f"experiment: {result.experiment_name}",
         f"dry run: {result.dry_run}",
@@ -355,23 +357,36 @@ def _metric_value(payload: object, key: str) -> object:
     return "n/a"
 
 
-def _processor_latest_metrics(metrics: dict[str, object], processor_name: str) -> object:
-    processors = metrics.get("processors")
+def _processor_average_metrics(metrics: dict[str, object], processor_name: str) -> object:
+    processors = metrics.get("processor_metrics")
     if not isinstance(processors, dict):
         return {}
-    stopped = processors.get("stopped")
-    if not isinstance(stopped, dict):
-        return {}
-    processor = stopped.get(processor_name)
+    processor = processors.get(processor_name)
     if not isinstance(processor, dict):
         return {}
-    parsed_metrics = processor.get("metrics")
-    if not isinstance(parsed_metrics, dict):
-        return {}
-    latest = parsed_metrics.get("latest")
-    if isinstance(latest, dict):
-        return latest
+    average = processor.get("average")
+    if isinstance(average, dict):
+        return average
     return {}
+
+
+def _aggregate_traffic_timing(traffic: object) -> dict[str, float]:
+    if not isinstance(traffic, dict) or not isinstance(traffic.get("phases"), list):
+        return {}
+    phases = traffic["phases"]
+    timings = [phase.get("timing", {}) for phase in phases if isinstance(phase, dict)]
+    produce_seconds = sum(
+        float(timing.get("produce_seconds", 0.0))
+        for timing in timings
+        if isinstance(timing, dict)
+    )
+    total_events = float(traffic.get("total_events", 0))
+    return {
+        "produce_seconds": produce_seconds,
+        "observed_events_per_second": (
+            total_events / produce_seconds if produce_seconds > 0 else 0.0
+        ),
+    }
 
 
 def _parse_processor_metrics(log_path: Path) -> dict[str, object]:

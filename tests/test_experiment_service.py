@@ -145,11 +145,12 @@ class RecordingProcessorManager:
                 "exit_code": 0,
                 "forced": False,
                 "metrics": {
-                    "count": 1,
-                    "latest": {
-                        "processed_events": 10,
-                        "events_per_second": 4.5,
-                    },
+                    "count": 2,
+                    "records": [
+                        {"processed_events": 6, "events_per_second": 3.5},
+                        {"processed_events": 10, "events_per_second": 4.5},
+                    ],
+                    "latest": {"processed_events": 10, "events_per_second": 4.5},
                 },
             }
         }
@@ -233,11 +234,15 @@ def test_experiment_service_writes_artifacts_and_inserts_postgres_result(tmp_pat
     assert postgres_store.inserted[0][0] == "unit_experiment"
     assert publisher.published == result.metrics["producer"]["total_events"]
     assert publisher.flushed is True
-    assert result.metrics["delta"]["redis_total_impressions"] == 2
-    assert result.metrics["before"]["current_model_snapshot_name"] == "current"
+    statistics = result.metrics["statistics"]
+    assert statistics["delta"]["redis_total_impressions"] == 2
+    assert statistics["before"]["current_model_snapshot_name"] == "current"
     assert result.metrics["timing"]["total_seconds"] >= 0
-    assert result.metrics["timing"]["traffic"]["produce_seconds"] >= 0
-    assert result.metrics["timing"]["traffic"]["observed_events_per_second"] >= 0
+    assert "traffic" not in result.metrics["timing"]
+    assert "setup" not in result.metrics
+    assert "processors" not in result.metrics
+    assert "dry_run" not in result.metrics["producer"]
+    assert "dry_run" not in result.metrics["traffic"]["phases"][0]["producer"]
 
 
 def test_experiment_service_dry_run_does_not_insert_postgres(tmp_path: Path) -> None:
@@ -261,7 +266,7 @@ def test_experiment_service_dry_run_does_not_insert_postgres(tmp_path: Path) -> 
     assert result.artifact_uri is not None
     assert Path(result.artifact_uri).exists()
     assert postgres_store.inserted == []
-    assert result.metrics["producer"]["dry_run"] is True
+    assert "dry_run" not in result.metrics["producer"]
 
 
 def test_full_experiment_runs_setup_processors_phases_and_strict_gates(
@@ -316,10 +321,11 @@ def test_full_experiment_runs_setup_processors_phases_and_strict_gates(
     assert result.metrics["timing"]["setup"]["total_seconds"] >= 0
     assert result.metrics["timing"]["processors"]["start_seconds"] >= 0
     assert result.metrics["timing"]["teardown"]["processor_stop_seconds"] >= 0
-    assert len(result.metrics["timing"]["traffic"]["phases"]) == 2
-    assert result.metrics["timing"]["traffic"]["phase_total_seconds"] >= 0
-    assert result.metrics["processor_metrics"]["realtime_ctr"]["latest"]["processed_events"] == 10
-    assert result.metrics["processor_metrics"]["realtime_ctr"]["latest"]["events_per_second"] == 4.5
+    assert "traffic" not in result.metrics["timing"]
+    realtime_metrics = result.metrics["processor_metrics"]["realtime_ctr"]
+    assert len(realtime_metrics["records"]) == 2
+    assert realtime_metrics["average"]["processed_events"] == 8.0
+    assert realtime_metrics["average"]["events_per_second"] == 4.0
     assert postgres_store.inserted
 
 
@@ -379,7 +385,7 @@ def test_full_experiment_dry_run_skips_setup_processors_and_postgres_insert(
     assert processor_manager.started is False
     assert processor_manager.stopped is False
     assert postgres_store.inserted == []
-    assert result.metrics["producer"]["dry_run"] is True
+    assert "dry_run" not in result.metrics["producer"]
 
 
 def test_processor_early_exit_is_recorded_as_gate_failure(tmp_path: Path) -> None:
