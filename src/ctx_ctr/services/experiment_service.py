@@ -558,6 +558,7 @@ class ExperimentService:
             result: JsonObject = {"records": cast(list[JsonValue], records)}
             if records:
                 result["average"] = self._average_processor_records(records)
+                result["aggregate"] = self._aggregate_processor_records(records)
             processor_metrics[processor_name] = result
         return processor_metrics
 
@@ -565,7 +566,11 @@ class ExperimentService:
         numeric_values: dict[str, list[float]] = {}
         for record in records:
             for key, value in record.items():
-                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                if (
+                    key == "subtask_index"
+                    or isinstance(value, bool)
+                    or not isinstance(value, (int, float))
+                ):
                     continue
                 numeric_values.setdefault(key, []).append(float(value))
         return {
@@ -573,6 +578,71 @@ class ExperimentService:
             for key, values in numeric_values.items()
             if values
         }
+
+    def _aggregate_processor_records(self, records: list[dict[str, object]]) -> JsonObject:
+        records_by_subtask: dict[int, list[dict[str, object]]] = {}
+        for record in records:
+            subtask_index = int(self._processor_numeric_value(record, "subtask_index"))
+            records_by_subtask.setdefault(subtask_index, []).append(record)
+
+        final_records = [subtask_records[-1] for subtask_records in records_by_subtask.values()]
+        counter_fields = (
+            "processed_events",
+            "valid_events",
+            "impressions",
+            "clicks",
+            "dead_letters",
+        )
+        aggregate: JsonObject = {
+            "subtask_count": len(records_by_subtask),
+            **{
+                field: sum(
+                    self._processor_numeric_value(record, field)
+                    for record in final_records
+                )
+                for field in counter_fields
+            },
+        }
+        max_elapsed_seconds = max(
+            (
+                self._processor_numeric_value(record, "elapsed_seconds")
+                for record in final_records
+            ),
+            default=0.0,
+        )
+        processed_events = sum(
+            self._processor_numeric_value(record, "processed_events")
+            for record in final_records
+        )
+        aggregate["elapsed_seconds"] = max_elapsed_seconds
+        aggregate["events_per_second"] = (
+            processed_events / max_elapsed_seconds
+            if max_elapsed_seconds > 0
+            else 0.0
+        )
+        aggregate["window_events_per_second"] = sum(
+            self._subtask_full_window_average(subtask_records)
+            for subtask_records in records_by_subtask.values()
+        )
+        return aggregate
+
+    def _subtask_full_window_average(self, records: list[dict[str, object]]) -> float:
+        max_window_events = max(
+            (self._processor_numeric_value(record, "window_events") for record in records),
+            default=0.0,
+        )
+        rates = [
+            self._processor_numeric_value(record, "window_events_per_second")
+            for record in records
+            if self._processor_numeric_value(record, "window_events") == max_window_events
+        ]
+        return sum(rates) / len(rates) if rates else 0.0
+
+    def _processor_numeric_value(self, record: dict[str, object], key: str) -> float:
+        value = record.get(key, 0.0)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return 0.0
+        return float(value)
 
     def _evaluate_success_gates(
         self,

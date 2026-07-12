@@ -23,7 +23,7 @@ processors:
       - "--starting-offsets"
       - "earliest"
       - "--parallelism"
-      - "1"
+      - "2"
       - "--log-every"
       - "5000"
     startup_seconds: 10

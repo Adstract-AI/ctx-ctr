@@ -188,5 +188,6 @@ The producer throughput metrics measure how fast the experiment sent events to
 Kafka. Realtime CTR consumer throughput is parsed separately from
 `CTR_PROCESSOR_METRICS` records emitted by the `realtime-ctr` subprocess and is
 stored under `metrics.processor_metrics.realtime_ctr`. That object contains all
-parsed records and the average of each numeric metric; processor commands, PIDs,
-timestamps, and stop metadata are not included in experiment metrics.
+parsed records, the average of each numeric metric, and aggregate throughput and
+final counters across Flink subtasks. Processor commands, PIDs, timestamps, and
+stop metadata are not included in experiment metrics.

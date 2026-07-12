@@ -35,6 +35,8 @@ def main() -> None:
     parser.add_argument("--click-topic", default=None, help="default click topic")
     parser.add_argument("--event-topic", default=None, help="default unified event topic")
     parser.add_argument("--dead-letter-topic", default=None, help="default dead-letter topic")
+    parser.add_argument("--topic-partitions", type=int, default=None)
+    parser.add_argument("--dead-letter-topic-partitions", type=int, default=None)
     args = parser.parse_args()
     file_config = load_job_config(args.config, CleanTopicsJobConfig)
     config = merge_job_config(file_config, _cli_overrides(args))
@@ -60,6 +62,8 @@ def main() -> None:
         adapter = KafkaTopicAdminAdapter(
             bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
             topic_names=topic_names,
+            partition_counts=config.partition_counts,
+            default_partition_count=config.topic_partitions,
         )
         adapter.clean_topics()
     except Exception as error:
@@ -83,6 +87,8 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
         "click_topic",
         "event_topic",
         "dead_letter_topic",
+        "topic_partitions",
+        "dead_letter_topic_partitions",
     ):
         value = getattr(args, field_name)
         if value is not None:

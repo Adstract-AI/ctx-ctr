@@ -19,6 +19,10 @@ from ctx_ctr.adapters.postgres_seed import PostgresSeedAdapter
 from ctx_ctr.adapters.redis_runtime import RedisRuntimeAdapter
 from ctx_ctr.adapters.redis_seed import RedisSeedAdapter
 from ctx_ctr.adapters.kafka_admin import KafkaTopicAdminAdapter
+from ctx_ctr.constants import (
+    DEFAULT_KAFKA_DEAD_LETTER_TOPIC_PARTITIONS,
+    DEFAULT_KAFKA_TOPIC_PARTITIONS,
+)
 from ctx_ctr.env_variables import (
     CLICK_TOPIC,
     DEAD_LETTER_TOPIC,
@@ -69,6 +73,12 @@ class RuntimeExperimentSetupRunner:
         KafkaTopicAdminAdapter(
             KAFKA_BOOTSTRAP_SERVERS,
             [IMPRESSION_TOPIC, CLICK_TOPIC, EVENT_TOPIC, DEAD_LETTER_TOPIC],
+            partition_counts={
+                IMPRESSION_TOPIC: DEFAULT_KAFKA_TOPIC_PARTITIONS,
+                CLICK_TOPIC: DEFAULT_KAFKA_TOPIC_PARTITIONS,
+                EVENT_TOPIC: DEFAULT_KAFKA_TOPIC_PARTITIONS,
+                DEAD_LETTER_TOPIC: DEFAULT_KAFKA_DEAD_LETTER_TOPIC_PARTITIONS,
+            },
         ).clean_topics()
 
     def reset_values(self) -> None:
@@ -320,7 +330,7 @@ def _result_lines(result: ExperimentRunResult) -> list[str]:
     traffic = metrics.get("traffic", {})
     traffic_timing = _aggregate_traffic_timing(traffic)
     teardown_timing = _metric_value(timing, "teardown")
-    realtime_metrics = _processor_average_metrics(metrics, "realtime_ctr")
+    realtime_metrics = _processor_summary_metrics(metrics, "realtime_ctr")
     return [
         f"experiment: {result.experiment_name}",
         f"dry run: {result.dry_run}",
@@ -357,13 +367,16 @@ def _metric_value(payload: object, key: str) -> object:
     return "n/a"
 
 
-def _processor_average_metrics(metrics: dict[str, object], processor_name: str) -> object:
+def _processor_summary_metrics(metrics: dict[str, object], processor_name: str) -> object:
     processors = metrics.get("processor_metrics")
     if not isinstance(processors, dict):
         return {}
     processor = processors.get(processor_name)
     if not isinstance(processor, dict):
         return {}
+    aggregate = processor.get("aggregate")
+    if isinstance(aggregate, dict):
+        return aggregate
     average = processor.get("average")
     if isinstance(average, dict):
         return average

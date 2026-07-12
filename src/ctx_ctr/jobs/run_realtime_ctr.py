@@ -155,11 +155,13 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
             self._last_event_monotonic = self._started_monotonic
             self._last_log_processed_events = 0
             self._metrics_timer_timestamp: int | None = None
+            self._subtask_index = 0
 
         def open(self, runtime_context: Any) -> None:
             """Initialize Redis-backed model state and keyed Flink state."""
 
             self._adapter = RedisCtrStateAdapter(self._redis_url)
+            self._subtask_index = runtime_context.get_index_of_this_subtask()
             model = self._adapter.read_current_model()
             self._service = RealtimeCtrUpdateService(model, self._trust_thresholds)
             self._bucket_state = runtime_context.get_state(
@@ -284,6 +286,7 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
             window_seconds = now - self._last_log_monotonic
             window_events = self._processed_events - self._last_log_processed_events
             metrics = {
+                "subtask_index": self._subtask_index,
                 "processed_events": self._processed_events,
                 "valid_events": self._valid_events,
                 "impressions": self._impressions,

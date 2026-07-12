@@ -57,6 +57,10 @@ Without `--only`, the job cleans all project topics:
 - `--click-topic <topic>`: Default click topic used when `only` is null.
 - `--event-topic <topic>`: Default unified event topic used when `only` is null.
 - `--dead-letter-topic <topic>`: Default dead-letter topic used when `only` is null.
+- `--topic-partitions <int>`: Partition count used for impression, click,
+  unified-event, and other selected topics. Defaults to `6`.
+- `--dead-letter-topic-partitions <int>`: Dead-letter partition count. Defaults
+  to `3`.
 
 CLI flags override values from the YAML config.
 
@@ -66,6 +70,10 @@ CLI flags override values from the YAML config.
 - `dry_run`: Same behavior as `--dry-run`.
 - `impression_topic`, `click_topic`, `event_topic`, `dead_letter_topic`:
   Default project topics used when `only` is `null`.
+- `topic_partitions`: Partition count for regular CTR topics and unknown topics
+  selected through `only`.
+- `dead_letter_topic_partitions`: Partition count for the configured dead-letter
+  topic.
 
 Kafka bootstrap servers come from `KAFKA_BOOTSTRAP_SERVERS` in the environment.
 
@@ -73,7 +81,8 @@ Kafka bootstrap servers come from `KAFKA_BOOTSTRAP_SERVERS` in the environment.
 
 The job deletes the selected topics, waits briefly, and recreates them with:
 
-- `num_partitions=1`
+- `num_partitions=6` for impression, click, and unified-event topics
+- `num_partitions=3` for the dead-letter topic
 - `replication_factor=1`
 
 This matches the local Docker Kafka setup.

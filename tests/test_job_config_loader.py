@@ -75,6 +75,12 @@ def test_null_is_allowed_only_for_optional_config_fields() -> None:
         "ctr.events",
         "ctr.dead-letter",
     ]
+    assert clean_topics.partition_counts == {
+        "ctr.impressions": 6,
+        "ctr.clicks": 6,
+        "ctr.events": 6,
+        "ctr.dead-letter": 3,
+    }
 
     with pytest.raises(ValueError):
         ProduceEventsJobConfig(impressions=None)  # type: ignore[arg-type]
@@ -127,6 +133,8 @@ def test_realtime_ctr_performance_baseline_config_preloads_kafka() -> None:
     assert definition.traffic.phases[0].impressions == 50000
     assert definition.traffic.phases[0].events_per_second == 0
     assert "earliest" in definition.processors.realtime_ctr.command
+    parallelism_index = definition.processors.realtime_ctr.command.index("--parallelism")
+    assert definition.processors.realtime_ctr.command[parallelism_index + 1] == "2"
     assert definition.processors.streaming_weight_update.enabled is False
 
 
