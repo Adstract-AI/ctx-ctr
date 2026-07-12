@@ -53,13 +53,35 @@ This produces 100 bucket combinations.
 - `--config <path>`: YAML config path. Defaults to `configs/seed_values.yaml`.
 - `--dry-run`: Builds and validates the seed dataset, prints the summary, and
   does not connect to PostgreSQL or Redis.
+- `--baseline-prior-mean`: Override cold-start global CTR prior mean.
+- `--triplet-prior-strength`: Override realtime triplet-bucket prior strength.
+- `--global-prior-strength`: Override global baseline prior strength.
+- `--ad-prior-strength`: Override ad-category family prior strength.
+- `--domain-prior-strength`: Override publisher-domain family prior strength.
+- `--context-prior-strength`: Override conversation-context family prior
+  strength.
+- `--trust-z-score`: Override the z-score used for seeded bucket confidence
+  intervals.
+- `--trust-min-impressions`: Override the minimum impressions required for a
+  seeded bucket to be marked trusted.
+- `--trust-max-variance`: Override the maximum posterior variance allowed for a
+  seeded bucket to be marked trusted.
+- `--trust-max-ci-width`: Override the maximum confidence-interval width
+  allowed for a seeded bucket to be marked trusted.
 
 CLI flags override values from the YAML config.
 
 ## Config Fields
 
 - `dry_run`: Same behavior as `--dry-run`.
-
+- `baseline_prior_mean`: Cold-start global CTR prior mean `m0`.
+- `triplet_prior_strength`: Prior strength for realtime triplet CTR buckets.
+- `global_prior_strength`: Prior strength for global baseline `w0` updates.
+- `ad_prior_strength`: Prior strength for ad-category single-feature buckets.
+- `domain_prior_strength`: Prior strength for publisher-domain single-feature
+  buckets.
+- `context_prior_strength`: Prior strength for conversation-context
+  single-feature buckets.
 ## How It Works
 
 The job builds a deterministic seed dataset in Python using Pydantic models.
@@ -73,7 +95,9 @@ For every bucket it computes:
 - confidence interval
 - trusted flag
 
-The model weights use a baseline CTR of `0.02` plus centered family weights.
+The model weights use `baseline_prior_mean` plus centered family weights.
+The current model snapshot also stores the global, triplet, and family-specific
+prior strengths used later by realtime CTR and weight-update jobs.
 
 ## Writes
 

@@ -6,7 +6,7 @@ import argparse
 from collections.abc import Sequence
 
 from ctx_ctr.adapters.kafka_event_producer import KafkaEventProducerAdapter
-from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL
+from ctx_ctr.env_variables import KAFKA_BOOTSTRAP_SERVERS, LOG_COLOR, LOG_LEVEL
 from ctx_ctr.job_config_loader import load_job_config, merge_job_config
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
@@ -59,7 +59,6 @@ def main(argv: Sequence[str] | None = None) -> None:
         default=None,
         help="simulate without publishing to Kafka",
     )
-    parser.add_argument("--bootstrap-servers", default=None, help="Kafka bootstrap servers")
     parser.add_argument("--impression-topic", default=None, help="impression output topic")
     parser.add_argument("--click-topic", default=None, help="click output topic")
     parser.add_argument("--event-topic", default=None, help="unified event output topic")
@@ -101,7 +100,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     producer: KafkaEventProducerAdapter | None = None
     try:
         producer = KafkaEventProducerAdapter(
-            bootstrap_servers=config.bootstrap_servers,
+            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
             impression_topic=config.impression_topic,
             click_topic=config.click_topic,
             event_topic=config.event_topic,
@@ -137,7 +136,6 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
         "log_every",
         "also_unified",
         "dry_run",
-        "bootstrap_servers",
         "impression_topic",
         "click_topic",
         "event_topic",

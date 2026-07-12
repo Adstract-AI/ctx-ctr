@@ -9,10 +9,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from ctx_ctr.constants import REDIS_CTR_KEY_PREFIX
 
-SeedMetadataValue: TypeAlias = str | int | float | bool | None | list[str]
+SeedMetadataValue: TypeAlias = (
+    str | int | float | bool | None | list[str] | dict[str, float]
+)
 SeedMetadata: TypeAlias = dict[str, SeedMetadataValue]
 SeedWeightPayload: TypeAlias = dict[str, dict[str, float]]
-SeedModelPayloadValue: TypeAlias = str | float | SeedWeightPayload | dict[str, float]
+SeedModelPayloadValue: TypeAlias = str | float | SeedWeightPayload | SeedMetadata
 SeedModelPayload: TypeAlias = dict[str, SeedModelPayloadValue]
 
 
@@ -104,9 +106,23 @@ class SeedModelMetrics(BaseModel):
     """Metrics describing the seeded model snapshot."""
 
     baseline_ctr: float = Field(gt=0, lt=1)
-    prior_strength: float = Field(gt=0)
+    global_prior_strength: float = Field(gt=0)
+    triplet_prior_strength: float = Field(gt=0)
+    family_prior_strengths: dict[str, float]
 
     model_config = ConfigDict(frozen=True)
+
+    @field_validator("family_prior_strengths")
+    @classmethod
+    def validate_family_prior_strengths(cls, strengths: dict[str, float]) -> dict[str, float]:
+        """Ensure all feature-family prior strengths are present and positive."""
+
+        expected_families = {"ad", "domain", "context"}
+        if set(strengths) != expected_families:
+            raise ValueError("family_prior_strengths must contain ad, domain, and context")
+        if any(strength <= 0 for strength in strengths.values()):
+            raise ValueError("family prior strengths must be positive")
+        return strengths
 
 
 class SeedModelSnapshot(BaseModel):

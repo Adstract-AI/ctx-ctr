@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 
 from ctx_ctr.adapters.kafka_admin import KafkaTopicAdminAdapter
-from ctx_ctr.env_variables import LOG_COLOR, LOG_LEVEL
+from ctx_ctr.env_variables import KAFKA_BOOTSTRAP_SERVERS, LOG_COLOR, LOG_LEVEL
 from ctx_ctr.job_config_loader import load_job_config, merge_job_config
 from ctx_ctr.jobs.output import print_failure, print_success
 from ctx_ctr.logging_config import configure_logging, get_logger
@@ -31,11 +31,12 @@ def main() -> None:
         default=None,
         help="print selected topics without writing",
     )
-    parser.add_argument("--bootstrap-servers", default=None, help="Kafka bootstrap servers")
     parser.add_argument("--impression-topic", default=None, help="default impression topic")
     parser.add_argument("--click-topic", default=None, help="default click topic")
     parser.add_argument("--event-topic", default=None, help="default unified event topic")
     parser.add_argument("--dead-letter-topic", default=None, help="default dead-letter topic")
+    parser.add_argument("--topic-partitions", type=int, default=None)
+    parser.add_argument("--dead-letter-topic-partitions", type=int, default=None)
     args = parser.parse_args()
     file_config = load_job_config(args.config, CleanTopicsJobConfig)
     config = merge_job_config(file_config, _cli_overrides(args))
@@ -59,8 +60,10 @@ def main() -> None:
     try:
         logger.info("Starting Kafka topic cleanup")
         adapter = KafkaTopicAdminAdapter(
-            bootstrap_servers=config.bootstrap_servers,
+            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
             topic_names=topic_names,
+            partition_counts=config.partition_counts,
+            default_partition_count=config.topic_partitions,
         )
         adapter.clean_topics()
     except Exception as error:
@@ -80,11 +83,12 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
     for field_name in (
         "only",
         "dry_run",
-        "bootstrap_servers",
         "impression_topic",
         "click_topic",
         "event_topic",
         "dead_letter_topic",
+        "topic_partitions",
+        "dead_letter_topic_partitions",
     ):
         value = getattr(args, field_name)
         if value is not None:

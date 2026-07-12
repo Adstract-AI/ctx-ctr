@@ -16,7 +16,6 @@ def test_produce_events_cli_overrides_yaml_config(tmp_path: Path, capsys) -> Non
                 "log_every: 0",
                 "also_unified: false",
                 "dry_run: true",
-                "bootstrap_servers: localhost:9092",
                 "impression_topic: ctr.impressions",
                 "click_topic: ctr.clicks",
                 "event_topic: ctr.events",

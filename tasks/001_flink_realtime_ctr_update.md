@@ -107,7 +107,7 @@ Bootstrap each bucket in this order:
    clicks = 0
    ```
 
-`prior_strength` comes from `weights:current.metrics.prior_strength`.
+`prior_strength` comes from `weights:current.metrics.triplet_prior_strength`.
 
 ## CTR Update Rules
 

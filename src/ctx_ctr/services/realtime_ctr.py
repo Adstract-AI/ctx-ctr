@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
+from ctx_ctr.constants import (
+    DEFAULT_CTR_TRUST_MAX_CI_WIDTH,
+    DEFAULT_CTR_TRUST_MAX_VARIANCE,
+    DEFAULT_CTR_TRUST_MIN_IMPRESSIONS,
+    DEFAULT_CTR_TRUST_Z_SCORE,
+)
 from ctx_ctr.logging_config import get_logger
 from ctx_ctr.models.ctr_state import (
     CtrBucketKey,
@@ -16,14 +22,19 @@ from ctx_ctr.models.ctr_state import (
 )
 from ctx_ctr.models.events import CtrEvent
 from ctx_ctr.services.ctr_math import beta_variance, clipped_confidence_interval, sigmoid
-from ctx_ctr.services.seed_values_dataset import (
-    TRUSTED_MAX_CI_WIDTH,
-    TRUSTED_MAX_VARIANCE,
-    TRUSTED_MIN_IMPRESSIONS,
-    Z_SCORE_95,
-)
 
 logger = get_logger(__name__)
+
+
+class CtrTrustThresholds(BaseModel):
+    """Thresholds used to classify a CTR bucket as trusted."""
+
+    z_score: float = Field(default=DEFAULT_CTR_TRUST_Z_SCORE, gt=0)
+    min_impressions: int = Field(default=DEFAULT_CTR_TRUST_MIN_IMPRESSIONS, ge=0)
+    max_variance: float = Field(default=DEFAULT_CTR_TRUST_MAX_VARIANCE, gt=0)
+    max_ci_width: float = Field(default=DEFAULT_CTR_TRUST_MAX_CI_WIDTH, gt=0, le=1)
+
+    model_config = ConfigDict(frozen=True)
 
 
 class CtrUpdateResult(BaseModel):
@@ -39,8 +50,13 @@ class CtrUpdateResult(BaseModel):
 class RealtimeCtrUpdateService:
     """Apply realtime CTR events to Bayesian bucket statistics."""
 
-    def __init__(self, model: CtrModelSnapshot) -> None:
+    def __init__(
+        self,
+        model: CtrModelSnapshot,
+        trust_thresholds: CtrTrustThresholds | None = None,
+    ) -> None:
         self._model = model
+        self._trust_thresholds = trust_thresholds or CtrTrustThresholds()
 
     def apply_event(
         self,
@@ -86,8 +102,8 @@ class RealtimeCtrUpdateService:
             + self._model.weights.w_dom.get(bucket_key.publisher_domain, 0.0)
             + self._model.weights.w_ctx.get(bucket_key.conversation_category, 0.0)
         )
-        alpha_prior = prior_mean * self._model.metrics.prior_strength
-        beta_prior = (1.0 - prior_mean) * self._model.metrics.prior_strength
+        alpha_prior = prior_mean * self._model.metrics.triplet_prior_strength
+        beta_prior = (1.0 - prior_mean) * self._model.metrics.triplet_prior_strength
         return self._build_bucket(
             bucket_key=bucket_key,
             impressions=0,
@@ -124,11 +140,15 @@ class RealtimeCtrUpdateService:
         beta_posterior = beta_prior + impressions - clicks
         ctr = alpha_posterior / (alpha_posterior + beta_posterior)
         variance = beta_variance(alpha_posterior, beta_posterior)
-        ci_low, ci_high = clipped_confidence_interval(ctr, variance, Z_SCORE_95)
+        ci_low, ci_high = clipped_confidence_interval(
+            ctr,
+            variance,
+            self._trust_thresholds.z_score,
+        )
         trusted = (
-            impressions >= TRUSTED_MIN_IMPRESSIONS
-            and variance <= TRUSTED_MAX_VARIANCE
-            and (ci_high - ci_low) <= TRUSTED_MAX_CI_WIDTH
+            impressions >= self._trust_thresholds.min_impressions
+            and variance <= self._trust_thresholds.max_variance
+            and (ci_high - ci_low) <= self._trust_thresholds.max_ci_width
         )
         return CtrBucketStatistic(
             ad_category=bucket_key.ad_category,

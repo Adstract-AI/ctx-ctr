@@ -4,7 +4,6 @@ random_seed: 42
 log_every: 10
 also_unified: false
 dry_run: false
-bootstrap_servers: localhost:9092
 impression_topic: ctr.impressions
 click_topic: ctr.clicks
 event_topic: ctr.events

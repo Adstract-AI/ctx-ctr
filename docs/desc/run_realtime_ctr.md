@@ -60,11 +60,10 @@ python -m ctx_ctr.jobs.seed_values
 - `--click-topic <topic>`: Click input topic. Defaults to `ctr.clicks`.
 - `--dead-letter-topic <topic>`: Output topic for rejected records. Defaults to
   `ctr.dead-letter`.
-- `--bootstrap-servers <host:port>`: Kafka bootstrap servers. Defaults to the
-  runtime setting.
-- `--redis-url <url>`: Redis URL. Defaults to the runtime setting.
 - `--consumer-group <name>`: Kafka consumer group. Defaults to
   `ctx-ctr-flink-realtime`.
+- `--starting-offsets <latest|earliest>`: Offset policy used when starting the
+  source. Defaults to `latest`; backlog experiments use `earliest`.
 - `--parallelism <int>`: PyFlink parallelism. Defaults to `1`.
 - `--checkpoint-interval-ms <int>`: Checkpoint interval. Defaults to `10000`.
   Use `0` to disable checkpointing.
@@ -72,21 +71,41 @@ python -m ctx_ctr.jobs.seed_values
   Defaults to the project `jars/` folder through the YAML config.
 - `--log-every <int>`: Log progress every N valid events. Use `0` to disable
   progress logs.
+- `--metrics-flush-interval-ms <int>`: Flush a partial processor metrics window
+  after activity. Defaults to `1000`; use `0` to disable.
+- `--trust-z-score <float>`: Z-score used for bucket confidence intervals.
+- `--trust-min-impressions <int>`: Minimum bucket impressions required for the
+  bucket `trusted` flag.
+- `--trust-max-variance <float>`: Maximum bucket posterior variance allowed for
+  the bucket `trusted` flag.
+- `--trust-max-ci-width <float>`: Maximum confidence-interval width allowed for
+  the bucket `trusted` flag.
 
 CLI flags override values from the YAML config.
 
 ## Config Fields
 
 - `impression_topic`, `click_topic`, `dead_letter_topic`: Kafka topics.
-- `bootstrap_servers`: Kafka bootstrap servers.
-- `redis_url`: Redis URL.
 - `consumer_group`: Kafka consumer group.
+- `starting_offsets`: `latest` for newly arriving traffic or `earliest` to
+  consume records already present in Kafka.
 - `parallelism`: PyFlink parallelism.
 - `checkpoint_interval_ms`: Flink checkpoint interval. Use `0` to disable.
 - `kafka_connector_jar`: Local Flink Kafka connector jar path. Relative paths
   are resolved from the project root. Defaults to
   `jars/flink-sql-connector-kafka-3.2.0-1.19.jar`.
 - `log_every`: Progress logging interval.
+- `metrics_flush_interval_ms`: Processing-time interval used to record partial
+  metrics batches that do not reach `log_every`.
+- `trust_z_score`: Z-score used for bucket confidence intervals.
+- `trust_min_impressions`: Minimum bucket impressions required for `trusted`.
+- `trust_max_variance`: Maximum bucket posterior variance allowed for
+  `trusted`.
+- `trust_max_ci_width`: Maximum bucket confidence-interval width allowed for
+  `trusted`.
+
+Kafka bootstrap servers come from `KAFKA_BOOTSTRAP_SERVERS` in the environment.
+Redis comes from `REDIS_URL` in the environment.
 
 ## Kafka Input
 
@@ -153,6 +172,9 @@ The job:
 7. Writes accepted bucket updates to Redis.
 8. Emits invalid events to the dead-letter Kafka topic.
 
+The trust guardrails only control the bucket `trusted` flag. They do not reject
+valid impression/click events and do not block Redis writes.
+
 ## Notes
 
 This job does not write to PostgreSQL.
@@ -170,5 +192,5 @@ See `docs/development_setup.md` for the download command. Use
 `--kafka-connector-jar` only when using a different connector location.
 
 For local development, start this job before running `produce_events` so the
-Kafka consumer begins from the latest offsets and receives newly produced
+By default, the Kafka consumer begins from the latest offsets and receives newly produced
 events.
