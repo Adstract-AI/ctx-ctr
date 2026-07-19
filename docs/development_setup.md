@@ -81,7 +81,14 @@ python -m pip install -r requirements.txt
 
 This includes the Python clients for Kafka, Redis, and PostgreSQL, together
 with the data-processing, configuration, testing, linting, and type-checking
-libraries.
+libraries. It also installs JupyterLab and Matplotlib for the analysis notebooks
+under `notebooks/`.
+
+Start JupyterLab from the project root with:
+
+```bash
+jupyter lab
+```
 
 ## 4. Install the Project in Editable Mode
 
