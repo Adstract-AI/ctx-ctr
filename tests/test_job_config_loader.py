@@ -136,7 +136,7 @@ def test_realtime_ctr_performance_baseline_config_preloads_kafka() -> None:
 
     assert definition.experiment_name == "realtime_ctr_performance_baseline"
     assert definition.traffic.preload_before_processors is True
-    assert definition.traffic.phases[0].impressions == 50000
+    assert definition.traffic.phases[0].impressions == 200000
     assert definition.traffic.phases[0].events_per_second == 0
     assert "earliest" in definition.processors.realtime_ctr.command
     parallelism_index = definition.processors.realtime_ctr.command.index("--parallelism")

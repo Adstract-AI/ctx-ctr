@@ -28,7 +28,7 @@ traffic, verifies strict success gates, captures processor logs, writes artifact
 and inserts one row into `ctr_experiment_results`.
 
 `realtime_ctr_performance_baseline` isolates realtime CTR throughput. It first
-produces an unthrottled 50,000-impression Kafka backlog, then starts only the
+produces an unthrottled 200,000-impression Kafka backlog, then starts only the
 realtime CTR processor from the earliest offsets and measures how quickly that
 backlog is processed.
 
@@ -149,9 +149,9 @@ run-experiment --experiment realtime_ctr_performance_baseline
 ```
 
 This experiment is destructive for local CTR state and Kafka topics. Its target
-is at least 3,000 processed events/second; the baseline records the observed
-average without failing solely because the initial implementation is below that
-target.
+is at least 3,000 processed events/second. The 200,000-impression backlog keeps
+the processor under sustained load long enough to compare parallelism and Redis
+write strategies without failing solely because a run is below that target.
 
 Use another experiment definition:
 

@@ -23,7 +23,7 @@ processors:
       - "--starting-offsets"
       - "earliest"
       - "--parallelism"
-      - "2"
+      - "1"
       - "--log-every"
       - "5000"
       - "--redis-flush-interval-ms"
@@ -39,7 +39,7 @@ traffic:
   preload_before_processors: true
   phases:
     - phase_name: kafka_backlog
-      impressions: 50000
+      impressions: 200000
       events_per_second: 0
       random_seed: 73001
       settle_seconds: 0
