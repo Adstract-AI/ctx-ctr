@@ -94,9 +94,15 @@ def test_realtime_ctr_defaults_to_project_jars_folder() -> None:
 
     assert config.kafka_connector_jar == "jars/flink-sql-connector-kafka-3.2.0-1.19.jar"
     assert config.starting_offsets == "latest"
+    assert config.redis_flush_interval_ms == 500
+    assert config.redis_flush_max_updates == 100
 
     with pytest.raises(ValueError):
         RunRealtimeCtrJobConfig(starting_offsets="committed")
+    with pytest.raises(ValueError):
+        RunRealtimeCtrJobConfig(redis_flush_interval_ms=0)
+    with pytest.raises(ValueError):
+        RunRealtimeCtrJobConfig(redis_flush_max_updates=0)
 
 
 def test_experiment_name_rejects_paths() -> None:

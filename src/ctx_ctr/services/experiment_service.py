@@ -592,6 +592,9 @@ class ExperimentService:
             "impressions",
             "clicks",
             "dead_letters",
+            "redis_flushes",
+            "redis_updates_flushed",
+            "redis_updates_coalesced",
         )
         aggregate: JsonObject = {
             "subtask_count": len(records_by_subtask),

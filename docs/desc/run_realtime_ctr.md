@@ -73,6 +73,10 @@ python -m ctx_ctr.jobs.seed_values
   progress logs.
 - `--metrics-flush-interval-ms <int>`: Flush a partial processor metrics window
   after activity. Defaults to `1000`; use `0` to disable.
+- `--redis-flush-interval-ms <int>`: Maximum processing-time delay before a
+  dirty bucket is written to Redis. Defaults to `500`.
+- `--redis-flush-max-updates <int>`: Flush a bucket after this many updates even
+  if its timer has not fired. Defaults to `100`.
 - `--trust-z-score <float>`: Z-score used for bucket confidence intervals.
 - `--trust-min-impressions <int>`: Minimum bucket impressions required for the
   bucket `trusted` flag.
@@ -97,6 +101,10 @@ CLI flags override values from the YAML config.
 - `log_every`: Progress logging interval.
 - `metrics_flush_interval_ms`: Processing-time interval used to record partial
   metrics batches that do not reach `log_every`.
+- `redis_flush_interval_ms`: Maximum healthy-runtime Redis staleness for a dirty
+  bucket.
+- `redis_flush_max_updates`: Maximum bucket updates coalesced before an early
+  Redis flush.
 - `trust_z_score`: Z-score used for bucket confidence intervals.
 - `trust_min_impressions`: Minimum bucket impressions required for `trusted`.
 - `trust_max_variance`: Maximum bucket posterior variance allowed for
@@ -135,13 +143,16 @@ weights.
 
 ## Redis Output
 
-Every valid event writes an updated bucket payload to:
+Dirty bucket state is periodically written to:
 
 ```text
 ctr:{ad_category}:{publisher_domain}:{conversation_category}
 ```
 
-The payload is compatible with the seeded bucket-statistic shape.
+The payload is compatible with the seeded bucket-statistic shape. Flink keyed
+state is updated for every valid event, while Redis receives only the latest
+snapshot after `redis_flush_interval_ms` or `redis_flush_max_updates`, whichever
+happens first.
 
 ## Dead-Letter Output
 
@@ -169,11 +180,18 @@ The job:
 4. Keeps per-bucket state in Flink keyed state.
 5. Loads initial bucket state from Redis when needed.
 6. Applies the Bayesian CTR update.
-7. Writes accepted bucket updates to Redis.
-8. Emits invalid events to the dead-letter Kafka topic.
+7. Marks accepted bucket updates dirty in keyed state.
+8. Flushes the latest dirty bucket snapshot to Redis on a keyed timer or update
+   threshold.
+9. Emits invalid events to the dead-letter Kafka topic.
 
 The trust guardrails only control the bucket `trusted` flag. They do not reject
-valid impression/click events and do not block Redis writes.
+valid impression/click events and do not block Redis flushes.
+
+Processor metrics include `redis_flushes`, `redis_updates_flushed`, and
+`redis_updates_coalesced`. For a completed backlog,
+`redis_updates_flushed == valid_events`; fewer `redis_flushes` means more
+per-event writes were removed from the hot path.
 
 ## Notes
 

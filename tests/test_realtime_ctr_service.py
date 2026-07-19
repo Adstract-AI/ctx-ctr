@@ -4,7 +4,40 @@ from datetime import UTC, datetime
 
 from ctx_ctr.models.ctr_state import CtrBucketKey, CtrModelMetrics, CtrModelSnapshot, CtrModelWeights
 from ctx_ctr.models.events import CtrEvent
-from ctx_ctr.services.realtime_ctr import CtrTrustThresholds, RealtimeCtrUpdateService
+from ctx_ctr.services.realtime_ctr import (
+    CtrTrustThresholds,
+    RealtimeCtrUpdateService,
+    RedisFlushAction,
+    redis_flush_action,
+)
+
+
+def test_redis_flush_action_schedules_accelerates_and_preserves_timer() -> None:
+    assert redis_flush_action(
+        dirty_updates=1,
+        max_updates=100,
+        has_timer=False,
+    ) is RedisFlushAction.SCHEDULE_TIMER
+    assert redis_flush_action(
+        dirty_updates=50,
+        max_updates=100,
+        has_timer=True,
+    ) is RedisFlushAction.KEEP_TIMER
+    assert redis_flush_action(
+        dirty_updates=100,
+        max_updates=100,
+        has_timer=True,
+    ) is RedisFlushAction.ACCELERATE_TIMER
+    assert redis_flush_action(
+        dirty_updates=101,
+        max_updates=100,
+        has_timer=True,
+    ) is RedisFlushAction.KEEP_TIMER
+    assert redis_flush_action(
+        dirty_updates=101,
+        max_updates=100,
+        has_timer=False,
+    ) is RedisFlushAction.ACCELERATE_TIMER
 
 
 def test_initialize_bucket_uses_current_model_prior_strength() -> None:

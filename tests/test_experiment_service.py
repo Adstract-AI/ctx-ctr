@@ -165,6 +165,9 @@ class RecordingProcessorManager:
                             "window_events": 6,
                             "window_events_per_second": 3.5,
                             "elapsed_seconds": 2.0,
+                            "redis_flushes": 2,
+                            "redis_updates_flushed": 6,
+                            "redis_updates_coalesced": 4,
                         },
                         {
                             "subtask_index": 1,
@@ -173,6 +176,9 @@ class RecordingProcessorManager:
                             "window_events": 10,
                             "window_events_per_second": 4.5,
                             "elapsed_seconds": 2.0,
+                            "redis_flushes": 3,
+                            "redis_updates_flushed": 10,
+                            "redis_updates_coalesced": 7,
                         },
                     ],
                     "latest": {"processed_events": 10, "events_per_second": 4.5},
@@ -355,6 +361,9 @@ def test_full_experiment_runs_setup_processors_phases_and_strict_gates(
     assert realtime_metrics["aggregate"]["processed_events"] == 16.0
     assert realtime_metrics["aggregate"]["events_per_second"] == 8.0
     assert realtime_metrics["aggregate"]["window_events_per_second"] == 8.0
+    assert realtime_metrics["aggregate"]["redis_flushes"] == 5.0
+    assert realtime_metrics["aggregate"]["redis_updates_flushed"] == 16.0
+    assert realtime_metrics["aggregate"]["redis_updates_coalesced"] == 11.0
     assert postgres_store.inserted
 
 

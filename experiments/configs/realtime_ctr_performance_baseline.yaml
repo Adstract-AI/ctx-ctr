@@ -26,6 +26,10 @@ processors:
       - "2"
       - "--log-every"
       - "5000"
+      - "--redis-flush-interval-ms"
+      - "500"
+      - "--redis-flush-max-updates"
+      - "100"
     startup_seconds: 10
     stop_timeout_seconds: 20
   streaming_weight_update:

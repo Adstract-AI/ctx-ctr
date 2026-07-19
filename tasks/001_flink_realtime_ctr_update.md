@@ -25,7 +25,8 @@ The job should:
 - consume clicks from `ctr.clicks`
 - key events by CTR bucket
 - maintain per-bucket CTR state
-- update Redis after each valid event
+- update Flink keyed state after each valid event and periodically flush the
+  latest dirty bucket snapshot to Redis
 - dead-letter invalid clicks
 - use the existing project logger and final job-summary style
 

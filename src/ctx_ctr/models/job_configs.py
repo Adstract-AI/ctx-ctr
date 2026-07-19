@@ -11,6 +11,8 @@ from ctx_ctr.constants import (
     DEFAULT_CTR_TRUST_Z_SCORE,
     DEFAULT_CTR_KAFKA_STARTING_OFFSETS,
     DEFAULT_CTR_METRICS_FLUSH_INTERVAL_MS,
+    DEFAULT_CTR_REDIS_FLUSH_INTERVAL_MS,
+    DEFAULT_CTR_REDIS_FLUSH_MAX_UPDATES,
     DEFAULT_FLINK_KAFKA_CONNECTOR_JAR,
     DEFAULT_KAFKA_DEAD_LETTER_TOPIC_PARTITIONS,
     DEFAULT_KAFKA_TOPIC_PARTITIONS,
@@ -127,6 +129,14 @@ class RunRealtimeCtrJobConfig(BaseModel):
     metrics_flush_interval_ms: int = Field(
         default=DEFAULT_CTR_METRICS_FLUSH_INTERVAL_MS,
         ge=0,
+    )
+    redis_flush_interval_ms: int = Field(
+        default=DEFAULT_CTR_REDIS_FLUSH_INTERVAL_MS,
+        gt=0,
+    )
+    redis_flush_max_updates: int = Field(
+        default=DEFAULT_CTR_REDIS_FLUSH_MAX_UPDATES,
+        gt=0,
     )
     trust_z_score: float = Field(default=DEFAULT_CTR_TRUST_Z_SCORE, gt=0)
     trust_min_impressions: int = Field(default=DEFAULT_CTR_TRUST_MIN_IMPRESSIONS, ge=0)

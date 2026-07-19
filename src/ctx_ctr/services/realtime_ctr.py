@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,6 +25,31 @@ from ctx_ctr.models.events import CtrEvent
 from ctx_ctr.services.ctr_math import beta_variance, clipped_confidence_interval, sigmoid
 
 logger = get_logger(__name__)
+
+
+class RedisFlushAction(StrEnum):
+    """Timer action after one keyed bucket update."""
+
+    KEEP_TIMER = "keep_timer"
+    SCHEDULE_TIMER = "schedule_timer"
+    ACCELERATE_TIMER = "accelerate_timer"
+
+
+def redis_flush_action(
+    *,
+    dirty_updates: int,
+    max_updates: int,
+    has_timer: bool,
+) -> RedisFlushAction:
+    """Return the timer action for a dirty Redis bucket."""
+
+    if dirty_updates >= max_updates:
+        if dirty_updates == max_updates or not has_timer:
+            return RedisFlushAction.ACCELERATE_TIMER
+        return RedisFlushAction.KEEP_TIMER
+    if has_timer:
+        return RedisFlushAction.KEEP_TIMER
+    return RedisFlushAction.SCHEDULE_TIMER
 
 
 class CtrTrustThresholds(BaseModel):
