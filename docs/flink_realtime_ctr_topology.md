@@ -1,6 +1,6 @@
 # Realtime CTR Flink Topology
 
-![Apache Flink dashboard showing the realtime CTR topology](topology.png)
+![Apache Flink dashboard showing the realtime CTR topology](../metadata/topology.png)
 
 The screenshot shows the `ctx-ctr-realtime-ctr` streaming job running with
 parallelism `2`. Flink displays two chained operator vertices:

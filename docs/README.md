@@ -23,7 +23,7 @@ The main processing pages are:
 ## Model And Results
 
 - [CTR modeling specification](../metadata/CTR%20Modeling.pdf)
-- [Realtime Flink topology](../metadata/flink_realtime_ctr_topology.md)
+- [Realtime Flink topology](flink_realtime_ctr_topology.md)
 - [CTR update performance analysis](../notebooks/1_ctr_update_performance_analysis.ipynb)
 - [CTR statistical validity analysis](../notebooks/2_ctr_update_domain_analysis.ipynb)
 

@@ -8,6 +8,8 @@ statistics for `(ad category, publisher domain, conversation context)` buckets,
 and periodically recalibrates a logistic model containing a global baseline and
 centered feature-family weights.
 
+---
+
 ## Goal
 
 The project studies two questions:
@@ -19,6 +21,8 @@ The project studies two questions:
 
 The domain formulas and model assumptions are based on
 [CTR Modeling](metadata/CTR%20Modeling.pdf).
+
+---
 
 ## System Overview
 
@@ -40,6 +44,8 @@ Experiments --------> metrics, processor logs, JSON/Markdown results
 Kafka provides the event stream, Flink owns stateful processing, Redis exposes
 current bucket and model state, and PostgreSQL stores durable snapshots and
 experiment summaries.
+
+---
 
 ## Quick Start
 
@@ -75,6 +81,8 @@ run-experiment --experiment full_system_local
 Every job has a YAML file under `configs/`; explicit CLI flags override the YAML
 values. Service connection settings come from `.env`.
 
+---
+
 ## Project Structure
 
 | Path | Purpose |
@@ -93,6 +101,8 @@ values. Service connection settings come from `.env`.
 | `compose.processing-clusters.yml` | Optional Dockerized Flink and Spark clusters. |
 | `tests/` | Automated service, configuration, adapter, and job tests. |
 
+---
+
 ## Documentation
 
 - [Documentation index](docs/README.md)
@@ -102,7 +112,9 @@ values. Service connection settings come from `.env`.
 - [Streaming weight-update job](docs/desc/run_streaming_weight_update.md)
 - [Experiment runner](docs/desc/run_experiment.md)
 - [CTR modeling specification](metadata/CTR%20Modeling.pdf)
-- [Realtime Flink topology](metadata/flink_realtime_ctr_topology.md)
+- [Realtime Flink topology](docs/flink_realtime_ctr_topology.md)
+
+---
 
 ## Analysis Notebooks
 
@@ -114,6 +126,8 @@ parallelism and Redis persistence strategies. The domain notebook validates
 count reconciliation, posterior accuracy, uncertainty, calibration, and the
 assumptions required for production use.
 
+---
+
 ## Credits
 
 Created by **Andrea Stevanoska**, **Viktor Kostadinoski**, and
@@ -124,6 +138,8 @@ The project was completed under the supervision and guidance of
 **Prof. Dr. Gjorgji Madzarov** and teaching assistant **Stefan Andonov** at the
 [Faculty of Computer Science and Engineering (FCSE / FINKI)](https://finki.ukim.mk/en),
 Ss. Cyril and Methodius University in Skopje.
+
+---
 
 ## License
 

@@ -257,5 +257,5 @@ Open `http://localhost:8081` and select the running
 parallel source and keyed processing operators. Operator chaining can combine
 the keyed process and dead-letter sink into one displayed vertex.
 
-See the captured [realtime Flink topology](../../metadata/flink_realtime_ctr_topology.md)
+See the captured [realtime Flink topology](../flink_realtime_ctr_topology.md)
 for an annotated example of this operator graph.
