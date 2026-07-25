@@ -7,6 +7,7 @@ The system consumes impression and click events, maintains Bayesian CTR
 statistics for `(ad category, publisher domain, conversation context)` buckets,
 and periodically recalibrates a logistic model containing a global baseline and
 centered feature-family weights.
+
 ## Goal
 
 The project studies two questions:
@@ -84,10 +85,10 @@ values. Service connection settings come from `.env`.
 | `src/ctx_ctr/models/` | Pydantic domain, configuration, and result models. |
 | `configs/` | Default YAML configuration for each runnable job. |
 | `experiments/configs/` | Reproducible experiment definitions. |
-| `experiments/results/` | Generated metrics, summaries, and processor logs; ignored by Git. |
+| `experiments/results/` | Experiment metrics, summaries, and processor logs. |
 | `notebooks/` | Performance and statistical-validity analyses. |
 | `docs/` | Installation guide and detailed job reference pages. |
-| `metadata/` | CTR modeling specification used by the domain implementation. |
+| `metadata/` | CTR modeling specification and captured Flink topology. |
 | `docker/`, `docker-compose.yml` | Kafka, Redis, PostgreSQL, and container setup. |
 | `compose.processing-clusters.yml` | Optional Dockerized Flink and Spark clusters. |
 | `tests/` | Automated service, configuration, adapter, and job tests. |
@@ -101,6 +102,7 @@ values. Service connection settings come from `.env`.
 - [Streaming weight-update job](docs/desc/run_streaming_weight_update.md)
 - [Experiment runner](docs/desc/run_experiment.md)
 - [CTR modeling specification](metadata/CTR%20Modeling.pdf)
+- [Realtime Flink topology](metadata/flink_realtime_ctr_topology.md)
 
 ## Analysis Notebooks
 
@@ -112,7 +114,7 @@ parallelism and Redis persistence strategies. The domain notebook validates
 count reconciliation, posterior accuracy, uncertainty, calibration, and the
 assumptions required for production use.
 
-## Academic Context
+## Credits
 
 Created by **Andrea Stevanoska**, **Viktor Kostadinoski**, and
 **Darko Petruushevski** for the course

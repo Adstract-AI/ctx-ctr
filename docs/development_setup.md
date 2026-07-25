@@ -242,6 +242,15 @@ docker compose \
   up -d --build
 ```
 
+Rebuild the Flink services after changes to `docker/flink/Dockerfile`:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f compose.processing-clusters.yml \
+  build --no-cache flink-jobmanager flink-taskmanager
+```
+
 Processing endpoints:
 
 ```text
@@ -250,6 +259,33 @@ Spark master UI:  http://localhost:8080
 Spark master URL: spark://localhost:7077
 Spark worker UI:  http://localhost:8082
 ```
+
+The dashboard displays only jobs submitted to this Docker Flink cluster.
+Running `realtime-ctr` directly from the Conda environment uses a separate local
+Flink runtime and does not register the job in the Docker dashboard.
+
+Submit the realtime CTR job to the Docker cluster:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f compose.processing-clusters.yml \
+  exec flink-jobmanager \
+  flink run -d \
+  --python /opt/ctx-ctr/src/ctx_ctr/jobs/run_realtime_ctr.py \
+  --config /opt/ctx-ctr/configs/run_realtime_ctr.yaml \
+  --kafka-connector-jar /opt/ctx-ctr/jars/flink-sql-connector-kafka-3.2.0-1.19.jar \
+  --parallelism 2
+```
+
+The detached submission prints a Flink job ID. Open
+`http://localhost:8081`, select **Jobs**, and open
+`ctx-ctr-realtime-ctr` to inspect its operator graph, subtasks, checkpoints,
+throughput, busy time, and backpressure.
+
+The supplied Kafka topics have six partitions and the Flink TaskManager has
+four task slots. With `--parallelism 2`, the keyed CTR operators run as two
+subtasks and process different bucket keys concurrently.
 
 To start the processing clusters and Kafka UI together:
 

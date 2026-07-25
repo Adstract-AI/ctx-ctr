@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
+from enum import Enum
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -27,7 +27,7 @@ from ctx_ctr.services.ctr_math import beta_variance, clipped_confidence_interval
 logger = get_logger(__name__)
 
 
-class RedisFlushAction(StrEnum):
+class RedisFlushAction(str, Enum):
     """Timer action after one keyed bucket update."""
 
     KEEP_TIMER = "keep_timer"
