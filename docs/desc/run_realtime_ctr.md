@@ -223,3 +223,39 @@ See `docs/development_setup.md` for the download command. Use
 For normal local streaming, start this job before `produce-events`. The default
 `latest` offset policy consumes events published after the Kafka source starts.
 Use `earliest` only when the job must consume an existing backlog.
+
+## Flink Dashboard
+
+The short command runs the job in a local PyFlink runtime:
+
+```bash
+realtime-ctr
+```
+
+To inspect the topology in the Docker Flink dashboard, start the processing
+cluster and submit the same Python job through the cluster's Flink CLI:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f compose.processing-clusters.yml \
+  up -d --build
+
+docker compose \
+  -f docker-compose.yml \
+  -f compose.processing-clusters.yml \
+  exec flink-jobmanager \
+  flink run -d \
+  --python /opt/ctx-ctr/src/ctx_ctr/jobs/run_realtime_ctr.py \
+  --config /opt/ctx-ctr/configs/run_realtime_ctr.yaml \
+  --kafka-connector-jar /opt/ctx-ctr/jars/flink-sql-connector-kafka-3.2.0-1.19.jar \
+  --parallelism 2
+```
+
+Open `http://localhost:8081` and select the running
+`ctx-ctr-realtime-ctr` job. The graph should report parallelism `2` for the
+parallel source and keyed processing operators. Operator chaining can combine
+the keyed process and dead-letter sink into one displayed vertex.
+
+See the captured [realtime Flink topology](../flink_realtime_ctr_topology.md)
+for an annotated example of this operator graph.
