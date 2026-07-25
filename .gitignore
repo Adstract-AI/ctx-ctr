@@ -14,3 +14,4 @@ logs/
 .idea/
 agents_metadata/
 /experiments/results/deprecated/
+tasks/
