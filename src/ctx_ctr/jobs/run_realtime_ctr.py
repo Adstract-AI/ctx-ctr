@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import logging
 import time
@@ -452,6 +453,7 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
 
     env = StreamExecutionEnvironment.get_execution_environment()
     env.set_parallelism(config.parallelism)
+    _normalize_pipeline_jars(env)
     kafka_connector_jar = _resolve_project_path(config.kafka_connector_jar)
     if not kafka_connector_jar.is_file():
         raise FileNotFoundError(
@@ -510,6 +512,33 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
     dead_letters.sink_to(dead_letter_sink).name("dead-letter-sink")
     with _suppress_py4j_keyboard_interrupt_log():
         env.execute("ctx-ctr-realtime-ctr")
+
+
+def _normalize_pipeline_jars(env: Any) -> None:
+    """Normalize PyFlink's pipeline.jars value for Docker cluster submission."""
+
+    from pyflink.java_gateway import get_gateway  # type: ignore[import-untyped]
+
+    jvm = get_gateway().jvm
+    configuration = jvm.org.apache.flink.python.util.PythonConfigUtil.getEnvironmentConfig(
+        env._j_stream_execution_environment
+    )
+    pipeline_jars = configuration.getString("pipeline.jars", "")
+    if not pipeline_jars.startswith("["):
+        return
+
+    try:
+        parsed_jars = ast.literal_eval(pipeline_jars)
+    except (SyntaxError, ValueError):
+        logger.debug(f"Could not normalize pipeline.jars value: {pipeline_jars}")
+        return
+
+    if not isinstance(parsed_jars, list):
+        return
+
+    normalized_jars = ";".join(str(jar) for jar in parsed_jars)
+    configuration.setString("pipeline.jars", normalized_jars)
+    logger.info(f"Normalized PyFlink pipeline.jars: {normalized_jars}")
 
 
 def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
