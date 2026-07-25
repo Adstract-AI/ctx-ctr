@@ -3,11 +3,14 @@ click_topic: ctr.clicks
 dead_letter_topic: ctr.dead-letter
 consumer_group: ctx-ctr-flink-realtime
 starting_offsets: latest
-parallelism: 1
+parallelism: 2
 checkpoint_interval_ms: 10000
 kafka_connector_jar: jars/flink-sql-connector-kafka-3.2.0-1.19.jar
 log_every: 10
 metrics_flush_interval_ms: 1000
+redis_flush_mode: periodic
+redis_flush_interval_ms: 500
+redis_flush_max_updates: 100
 trust_z_score: 1.96
 trust_min_impressions: 100
 trust_max_variance: 0.0005

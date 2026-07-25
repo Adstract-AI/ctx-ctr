@@ -64,7 +64,8 @@ python -m ctx_ctr.jobs.seed_values
   `ctx-ctr-flink-realtime`.
 - `--starting-offsets <latest|earliest>`: Offset policy used when starting the
   source. Defaults to `latest`; backlog experiments use `earliest`.
-- `--parallelism <int>`: PyFlink parallelism. Defaults to `1`.
+- `--parallelism <int>`: PyFlink parallelism. Defaults to `2` in the supplied
+  YAML config.
 - `--checkpoint-interval-ms <int>`: Checkpoint interval. Defaults to `10000`.
   Use `0` to disable checkpointing.
 - `--kafka-connector-jar <path>`: Local path to the Flink Kafka connector jar.
@@ -73,6 +74,14 @@ python -m ctx_ctr.jobs.seed_values
   progress logs.
 - `--metrics-flush-interval-ms <int>`: Flush a partial processor metrics window
   after activity. Defaults to `1000`; use `0` to disable.
+- `--redis-flush-mode <periodic|per_event>`: Redis persistence strategy.
+  Defaults to `periodic`. Use `per_event` to synchronously write every accepted
+  bucket update when immediate external visibility is required or when measuring
+  the cost of synchronous writes.
+- `--redis-flush-interval-ms <int>`: Maximum processing-time delay before a
+  dirty bucket is written to Redis in `periodic` mode. Defaults to `500`.
+- `--redis-flush-max-updates <int>`: Flush a bucket after this many updates even
+  if its timer has not fired in `periodic` mode. Defaults to `100`.
 - `--trust-z-score <float>`: Z-score used for bucket confidence intervals.
 - `--trust-min-impressions <int>`: Minimum bucket impressions required for the
   bucket `trusted` flag.
@@ -97,6 +106,12 @@ CLI flags override values from the YAML config.
 - `log_every`: Progress logging interval.
 - `metrics_flush_interval_ms`: Processing-time interval used to record partial
   metrics batches that do not reach `log_every`.
+- `redis_flush_mode`: `periodic` coalesces dirty updates using Flink timers;
+  `per_event` writes each accepted bucket update to Redis synchronously.
+- `redis_flush_interval_ms`: Maximum healthy-runtime Redis staleness for a dirty
+  bucket in `periodic` mode.
+- `redis_flush_max_updates`: Maximum bucket updates coalesced before an early
+  Redis flush in `periodic` mode.
 - `trust_z_score`: Z-score used for bucket confidence intervals.
 - `trust_min_impressions`: Minimum bucket impressions required for `trusted`.
 - `trust_max_variance`: Maximum bucket posterior variance allowed for
@@ -135,13 +150,18 @@ weights.
 
 ## Redis Output
 
-Every valid event writes an updated bucket payload to:
+Updated bucket state is written to:
 
 ```text
 ctr:{ad_category}:{publisher_domain}:{conversation_category}
 ```
 
-The payload is compatible with the seeded bucket-statistic shape.
+The payload is compatible with the seeded bucket-statistic shape. Flink keyed
+state is updated for every valid event. In `periodic` mode, Redis receives the
+latest dirty snapshot after `redis_flush_interval_ms` or
+`redis_flush_max_updates`, whichever happens first. In `per_event` mode, the
+accepted update is written synchronously before the next event is handled by
+that operator subtask.
 
 ## Dead-Letter Output
 
@@ -169,11 +189,20 @@ The job:
 4. Keeps per-bucket state in Flink keyed state.
 5. Loads initial bucket state from Redis when needed.
 6. Applies the Bayesian CTR update.
-7. Writes accepted bucket updates to Redis.
-8. Emits invalid events to the dead-letter Kafka topic.
+7. Persists accepted updates according to `redis_flush_mode`: immediately for
+   `per_event`, or by marking the bucket dirty for `periodic`.
+8. In `periodic` mode, flushes the latest dirty bucket snapshot to Redis on a
+   keyed timer or update threshold.
+9. Emits invalid events to the dead-letter Kafka topic.
 
 The trust guardrails only control the bucket `trusted` flag. They do not reject
-valid impression/click events and do not block Redis writes.
+valid impression/click events and do not block Redis flushes.
+
+Processor metrics include `redis_flushes`, `redis_updates_flushed`, and
+`redis_updates_coalesced`. For a completed backlog,
+`redis_updates_flushed == valid_events`; fewer `redis_flushes` means more
+per-event writes were removed from the hot path. In `per_event` mode,
+`redis_flushes == redis_updates_flushed` and `redis_updates_coalesced == 0`.
 
 ## Notes
 
@@ -191,6 +220,6 @@ jars/flink-sql-connector-kafka-3.2.0-1.19.jar
 See `docs/development_setup.md` for the download command. Use
 `--kafka-connector-jar` only when using a different connector location.
 
-For local development, start this job before running `produce_events` so the
-By default, the Kafka consumer begins from the latest offsets and receives newly produced
-events.
+For normal local streaming, start this job before `produce-events`. The default
+`latest` offset policy consumes events published after the Kafka source starts.
+Use `earliest` only when the job must consume an existing backlog.

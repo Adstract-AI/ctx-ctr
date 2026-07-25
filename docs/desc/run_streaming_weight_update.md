@@ -68,8 +68,8 @@ That means the update cadence is:
 first event arrives -> register timer -> every interval_seconds update weights
 ```
 
-Evidence is cumulative from the running Flink state. It is not limited to only
-the last hour unless we later add decay or explicit window expiration.
+Evidence is cumulative for the lifetime of the running Flink state. The job
+does not apply decay or explicit window expiration.
 
 ## Flags
 
@@ -111,9 +111,8 @@ PostgreSQL comes from `POSTGRES_DSN`.
   `min_feature_impressions`, `max_feature_ci_width`,
   `snapshot_name_prefix`: Weight-learning controls.
 - `baseline_update`: Enable global baseline updates.
-- `baseline_max_ci_width`: Baseline CI guard. The default streaming config is
-  intentionally looser than `weight-update` so short local timer intervals can
-  produce accepted updates during development.
+- `baseline_max_ci_width`: Maximum baseline confidence-interval width accepted
+  for an update.
 - `dry_run`: Compute without Redis/PostgreSQL writes.
 
 ## Notes

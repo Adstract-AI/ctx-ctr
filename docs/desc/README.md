@@ -1,31 +1,22 @@
-# Job Descriptions
+# Job Reference
 
-This folder documents every runnable job in the project.
+Each runnable job has a default YAML file under `configs/`. Values supplied as
+CLI flags take precedence over YAML values. Service connection details such as
+Kafka bootstrap servers, the Redis URL, and the PostgreSQL DSN come from
+environment variables.
 
-When a new job is added under `src/ctx_ctr/jobs`, add one Markdown file here
-with:
+| Command | Purpose | Documentation |
+| --- | --- | --- |
+| `seed-values` | Initialize deterministic model and bucket state | [Seed values](seed_values.md) |
+| `reset-values` | Clear project-owned Redis and PostgreSQL state | [Reset values](reset_values.md) |
+| `clean-topics` | Delete and recreate Kafka topics | [Clean topics](clean_topics.md) |
+| `produce-events` | Generate simulated impression and click traffic | [Produce events](produce_events.md) |
+| `realtime-ctr` | Update contextual CTR buckets with PyFlink | [Realtime CTR](run_realtime_ctr.md) |
+| `streaming-weight-update` | Learn model weights continuously with PyFlink | [Streaming weight update](run_streaming_weight_update.md) |
+| `weight-update` | Recompute model weights from Redis bucket state | [Weight update](run_weight_update.md) |
+| `persist-redis-buckets` | Copy current Redis CTR buckets to PostgreSQL | [Persist Redis buckets](persist_redis_buckets.md) |
+| `watch-redis-values` | Inspect changing Redis model and bucket values | [Watch Redis values](watch_redis_values.md) |
+| `run-experiment` | Run reproducible system and performance experiments | [Experiments](run_experiment.md) |
 
-- what the job does
-- when to use it
-- all flags
-- default YAML config path under `configs/`
-- short command name from `pyproject.toml`
-- what it reads and writes
-- example commands
-- important safety notes
-
-Every job loads defaults from its YAML config file. CLI flags override config
-values when the same option is supplied in both places.
-
-Current jobs:
-
-- [seed_values](seed_values.md)
-- [reset_values](reset_values.md)
-- [clean_topics](clean_topics.md)
-- [persist_redis_buckets](persist_redis_buckets.md)
-- [produce_events](produce_events.md)
-- [run_experiment](run_experiment.md)
-- [run_realtime_ctr](run_realtime_ctr.md)
-- [run_streaming_weight_update](run_streaming_weight_update.md)
-- [run_weight_update](run_weight_update.md)
-- [watch_redis_values](watch_redis_values.md)
+`reset-values`, `clean-topics`, and destructive experiment definitions remove
+local state. Review their documentation and configuration before running them.

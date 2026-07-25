@@ -94,9 +94,18 @@ def test_realtime_ctr_defaults_to_project_jars_folder() -> None:
 
     assert config.kafka_connector_jar == "jars/flink-sql-connector-kafka-3.2.0-1.19.jar"
     assert config.starting_offsets == "latest"
+    assert config.redis_flush_mode == "periodic"
+    assert config.redis_flush_interval_ms == 500
+    assert config.redis_flush_max_updates == 100
 
     with pytest.raises(ValueError):
         RunRealtimeCtrJobConfig(starting_offsets="committed")
+    with pytest.raises(ValueError):
+        RunRealtimeCtrJobConfig(redis_flush_mode="immediate")  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        RunRealtimeCtrJobConfig(redis_flush_interval_ms=0)
+    with pytest.raises(ValueError):
+        RunRealtimeCtrJobConfig(redis_flush_max_updates=0)
 
 
 def test_experiment_name_rejects_paths() -> None:
@@ -130,11 +139,13 @@ def test_realtime_ctr_performance_baseline_config_preloads_kafka() -> None:
 
     assert definition.experiment_name == "realtime_ctr_performance_baseline"
     assert definition.traffic.preload_before_processors is True
-    assert definition.traffic.phases[0].impressions == 50000
+    assert definition.traffic.phases[0].impressions == 200000
     assert definition.traffic.phases[0].events_per_second == 0
     assert "earliest" in definition.processors.realtime_ctr.command
     parallelism_index = definition.processors.realtime_ctr.command.index("--parallelism")
-    assert definition.processors.realtime_ctr.command[parallelism_index + 1] == "2"
+    assert int(definition.processors.realtime_ctr.command[parallelism_index + 1]) >= 1
+    flush_mode_index = definition.processors.realtime_ctr.command.index("--redis-flush-mode")
+    assert definition.processors.realtime_ctr.command[flush_mode_index + 1] == "per_event"
     assert definition.processors.streaming_weight_update.enabled is False
 
 

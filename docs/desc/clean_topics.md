@@ -81,11 +81,13 @@ Kafka bootstrap servers come from `KAFKA_BOOTSTRAP_SERVERS` in the environment.
 
 The job deletes the selected topics, waits briefly, and recreates them with:
 
-- `num_partitions=6` for impression, click, and unified-event topics
-- `num_partitions=3` for the dead-letter topic
+- `topic_partitions` for impression, click, unified-event, and explicitly
+  selected topics not otherwise configured
+- `dead_letter_topic_partitions` for the configured dead-letter topic
 - `replication_factor=1`
 
-This matches the local Docker Kafka setup.
+The supplied YAML uses six regular partitions and three dead-letter partitions,
+matching the local Docker Kafka setup.
 
 ## Writes
 
@@ -96,6 +98,7 @@ Kafka:
 
 ## Notes
 
-This job is intentionally separate from `seed_values` and `reset_values`.
+Kafka topic lifecycle is separate from Redis and PostgreSQL state
+initialization.
 
 Cleaning topics removes Kafka messages. It does not affect PostgreSQL or Redis.

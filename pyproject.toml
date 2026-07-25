@@ -7,6 +7,12 @@ name = "ctx-ctr"
 version = "0.1.0"
 description = "CTR real-time processing research implementation."
 requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Andrea Stevanoska" },
+    { name = "Viktor Kostadinoski" },
+    { name = "Darko Petruushevski" },
+]
 
 [project.scripts]
 clean-topics = "ctx_ctr.jobs.clean_topics:main"
