@@ -71,9 +71,9 @@ Java launcher and is normal when `JAVA_HOME` points to the Conda JDK and
 
 ## 3. Install or Refresh Core Python Requirements
 
-The previous `conda env update` command installs `requirements.txt`
-automatically. If the `big-data` environment already existed and only the
-Python dependencies need to be installed or refreshed, run:
+The environment definition installs `requirements.txt` automatically. To
+install or refresh only the Python dependencies in an existing `big-data`
+environment, run:
 
 ```bash
 python -m pip install -r requirements.txt
@@ -81,7 +81,14 @@ python -m pip install -r requirements.txt
 
 This includes the Python clients for Kafka, Redis, and PostgreSQL, together
 with the data-processing, configuration, testing, linting, and type-checking
-libraries.
+libraries. It also installs JupyterLab and Matplotlib for the analysis notebooks
+under `notebooks/`.
+
+Start JupyterLab from the project root with:
+
+```bash
+jupyter lab
+```
 
 ## 4. Install the Project in Editable Mode
 
@@ -235,6 +242,15 @@ docker compose \
   up -d --build
 ```
 
+Rebuild the Flink services after changes to `docker/flink/Dockerfile`:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f compose.processing-clusters.yml \
+  build --no-cache flink-jobmanager flink-taskmanager
+```
+
 Processing endpoints:
 
 ```text
@@ -243,6 +259,33 @@ Spark master UI:  http://localhost:8080
 Spark master URL: spark://localhost:7077
 Spark worker UI:  http://localhost:8082
 ```
+
+The dashboard displays only jobs submitted to this Docker Flink cluster.
+Running `realtime-ctr` directly from the Conda environment uses a separate local
+Flink runtime and does not register the job in the Docker dashboard.
+
+Submit the realtime CTR job to the Docker cluster:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f compose.processing-clusters.yml \
+  exec flink-jobmanager \
+  flink run -d \
+  --python /opt/ctx-ctr/src/ctx_ctr/jobs/run_realtime_ctr.py \
+  --config /opt/ctx-ctr/configs/run_realtime_ctr.yaml \
+  --kafka-connector-jar /opt/ctx-ctr/jars/flink-sql-connector-kafka-3.2.0-1.19.jar \
+  --parallelism 2
+```
+
+The detached submission prints a Flink job ID. Open
+`http://localhost:8081`, select **Jobs**, and open
+`ctx-ctr-realtime-ctr` to inspect its operator graph, subtasks, checkpoints,
+throughput, busy time, and backpressure.
+
+The supplied Kafka topics have six partitions and the Flink TaskManager has
+four task slots. With `--parallelism 2`, the keyed CTR operators run as two
+subtasks and process different bucket keys concurrently.
 
 To start the processing clusters and Kafka UI together:
 
@@ -317,9 +360,9 @@ docker compose \
   ps
 ```
 
-## 13. Seed Demo Data
+## 13. Initialize Deterministic CTR State
 
-Validate the deterministic research-demo seed dataset without writing anything:
+Validate the deterministic seed dataset without writing anything:
 
 ```bash
 seed-values --dry-run
@@ -331,7 +374,7 @@ Reset Postgres and Redis seed-owned state:
 reset-values
 ```
 
-Seed bucket statistics, model weights, and seed metadata:
+Seed bucket statistics, model weights, and the seed run summary:
 
 ```bash
 seed-values

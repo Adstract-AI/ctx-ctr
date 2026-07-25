@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from ctx_ctr.constants import (
@@ -9,7 +11,14 @@ from ctx_ctr.constants import (
     DEFAULT_CTR_TRUST_MAX_VARIANCE,
     DEFAULT_CTR_TRUST_MIN_IMPRESSIONS,
     DEFAULT_CTR_TRUST_Z_SCORE,
+    DEFAULT_CTR_KAFKA_STARTING_OFFSETS,
+    DEFAULT_CTR_METRICS_FLUSH_INTERVAL_MS,
+    DEFAULT_CTR_REDIS_FLUSH_INTERVAL_MS,
+    DEFAULT_CTR_REDIS_FLUSH_MAX_UPDATES,
+    DEFAULT_CTR_REDIS_FLUSH_MODE,
     DEFAULT_FLINK_KAFKA_CONNECTOR_JAR,
+    DEFAULT_KAFKA_DEAD_LETTER_TOPIC_PARTITIONS,
+    DEFAULT_KAFKA_TOPIC_PARTITIONS,
     DEFAULT_WEIGHT_UPDATE_BASELINE_MAX_CI_WIDTH,
     DEFAULT_WEIGHT_UPDATE_EVIDENCE_SMOOTHING,
     DEFAULT_WEIGHT_UPDATE_INTERVAL_SECONDS,
@@ -58,6 +67,11 @@ class CleanTopicsJobConfig(BaseModel):
     click_topic: str = CLICK_TOPIC
     event_topic: str = EVENT_TOPIC
     dead_letter_topic: str = DEAD_LETTER_TOPIC
+    topic_partitions: int = Field(default=DEFAULT_KAFKA_TOPIC_PARTITIONS, gt=0)
+    dead_letter_topic_partitions: int = Field(
+        default=DEFAULT_KAFKA_DEAD_LETTER_TOPIC_PARTITIONS,
+        gt=0,
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -71,6 +85,17 @@ class CleanTopicsJobConfig(BaseModel):
             self.event_topic,
             self.dead_letter_topic,
         ]
+
+    @property
+    def partition_counts(self) -> dict[str, int]:
+        """Return configured partition counts for known project topics."""
+
+        return {
+            self.impression_topic: self.topic_partitions,
+            self.click_topic: self.topic_partitions,
+            self.event_topic: self.topic_partitions,
+            self.dead_letter_topic: self.dead_letter_topic_partitions,
+        }
 
 
 class ProduceEventsJobConfig(BaseModel):
@@ -96,10 +121,27 @@ class RunRealtimeCtrJobConfig(BaseModel):
     click_topic: str = CLICK_TOPIC
     dead_letter_topic: str = DEAD_LETTER_TOPIC
     consumer_group: str = "ctx-ctr-flink-realtime"
+    starting_offsets: str = Field(
+        default=DEFAULT_CTR_KAFKA_STARTING_OFFSETS,
+        pattern="^(earliest|latest)$",
+    )
     parallelism: int = Field(default=1, gt=0)
     checkpoint_interval_ms: int = Field(default=10000, ge=0)
     kafka_connector_jar: str = DEFAULT_FLINK_KAFKA_CONNECTOR_JAR
     log_every: int = Field(default=100, ge=0)
+    metrics_flush_interval_ms: int = Field(
+        default=DEFAULT_CTR_METRICS_FLUSH_INTERVAL_MS,
+        ge=0,
+    )
+    redis_flush_mode: Literal["periodic", "per_event"] = DEFAULT_CTR_REDIS_FLUSH_MODE
+    redis_flush_interval_ms: int = Field(
+        default=DEFAULT_CTR_REDIS_FLUSH_INTERVAL_MS,
+        gt=0,
+    )
+    redis_flush_max_updates: int = Field(
+        default=DEFAULT_CTR_REDIS_FLUSH_MAX_UPDATES,
+        gt=0,
+    )
     trust_z_score: float = Field(default=DEFAULT_CTR_TRUST_Z_SCORE, gt=0)
     trust_min_impressions: int = Field(default=DEFAULT_CTR_TRUST_MIN_IMPRESSIONS, ge=0)
     trust_max_variance: float = Field(default=DEFAULT_CTR_TRUST_MAX_VARIANCE, gt=0)

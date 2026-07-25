@@ -100,6 +100,17 @@ class FakePublisher:
         self.flushed = True
 
 
+class PreloadRecordingPublisher(FakePublisher):
+    def __init__(self, processor_manager: "RecordingProcessorManager") -> None:
+        super().__init__()
+        self._processor_manager = processor_manager
+        self.published_before_processor_start = True
+
+    def publish(self, event: object, *, also_unified: bool) -> None:
+        self.published_before_processor_start &= not self._processor_manager.started
+        super().publish(event, also_unified=also_unified)
+
+
 class RecordingSetupRunner:
     def __init__(self) -> None:
         self.calls: list[str] = []
@@ -145,11 +156,32 @@ class RecordingProcessorManager:
                 "exit_code": 0,
                 "forced": False,
                 "metrics": {
-                    "count": 1,
-                    "latest": {
-                        "processed_events": 10,
-                        "events_per_second": 4.5,
-                    },
+                    "count": 2,
+                    "records": [
+                        {
+                            "subtask_index": 0,
+                            "processed_events": 6,
+                            "events_per_second": 3.5,
+                            "window_events": 6,
+                            "window_events_per_second": 3.5,
+                            "elapsed_seconds": 2.0,
+                            "redis_flushes": 2,
+                            "redis_updates_flushed": 6,
+                            "redis_updates_coalesced": 4,
+                        },
+                        {
+                            "subtask_index": 1,
+                            "processed_events": 10,
+                            "events_per_second": 4.5,
+                            "window_events": 10,
+                            "window_events_per_second": 4.5,
+                            "elapsed_seconds": 2.0,
+                            "redis_flushes": 3,
+                            "redis_updates_flushed": 10,
+                            "redis_updates_coalesced": 7,
+                        },
+                    ],
+                    "latest": {"processed_events": 10, "events_per_second": 4.5},
                 },
             }
         }
@@ -233,11 +265,15 @@ def test_experiment_service_writes_artifacts_and_inserts_postgres_result(tmp_pat
     assert postgres_store.inserted[0][0] == "unit_experiment"
     assert publisher.published == result.metrics["producer"]["total_events"]
     assert publisher.flushed is True
-    assert result.metrics["delta"]["redis_total_impressions"] == 2
-    assert result.metrics["before"]["current_model_snapshot_name"] == "current"
+    statistics = result.metrics["statistics"]
+    assert statistics["delta"]["redis_total_impressions"] == 2
+    assert statistics["before"]["current_model_snapshot_name"] == "current"
     assert result.metrics["timing"]["total_seconds"] >= 0
-    assert result.metrics["timing"]["traffic"]["produce_seconds"] >= 0
-    assert result.metrics["timing"]["traffic"]["observed_events_per_second"] >= 0
+    assert "traffic" not in result.metrics["timing"]
+    assert "setup" not in result.metrics
+    assert "processors" not in result.metrics
+    assert "dry_run" not in result.metrics["producer"]
+    assert "dry_run" not in result.metrics["traffic"]["phases"][0]["producer"]
 
 
 def test_experiment_service_dry_run_does_not_insert_postgres(tmp_path: Path) -> None:
@@ -261,7 +297,7 @@ def test_experiment_service_dry_run_does_not_insert_postgres(tmp_path: Path) -> 
     assert result.artifact_uri is not None
     assert Path(result.artifact_uri).exists()
     assert postgres_store.inserted == []
-    assert result.metrics["producer"]["dry_run"] is True
+    assert "dry_run" not in result.metrics["producer"]
 
 
 def test_full_experiment_runs_setup_processors_phases_and_strict_gates(
@@ -316,11 +352,58 @@ def test_full_experiment_runs_setup_processors_phases_and_strict_gates(
     assert result.metrics["timing"]["setup"]["total_seconds"] >= 0
     assert result.metrics["timing"]["processors"]["start_seconds"] >= 0
     assert result.metrics["timing"]["teardown"]["processor_stop_seconds"] >= 0
-    assert len(result.metrics["timing"]["traffic"]["phases"]) == 2
-    assert result.metrics["timing"]["traffic"]["phase_total_seconds"] >= 0
-    assert result.metrics["processor_metrics"]["realtime_ctr"]["latest"]["processed_events"] == 10
-    assert result.metrics["processor_metrics"]["realtime_ctr"]["latest"]["events_per_second"] == 4.5
+    assert "traffic" not in result.metrics["timing"]
+    realtime_metrics = result.metrics["processor_metrics"]["realtime_ctr"]
+    assert len(realtime_metrics["records"]) == 2
+    assert realtime_metrics["average"]["processed_events"] == 8.0
+    assert realtime_metrics["average"]["events_per_second"] == 4.0
+    assert realtime_metrics["aggregate"]["subtask_count"] == 2
+    assert realtime_metrics["aggregate"]["processed_events"] == 16.0
+    assert realtime_metrics["aggregate"]["events_per_second"] == 8.0
+    assert realtime_metrics["aggregate"]["window_events_per_second"] == 8.0
+    assert realtime_metrics["aggregate"]["redis_flushes"] == 5.0
+    assert realtime_metrics["aggregate"]["redis_updates_flushed"] == 16.0
+    assert realtime_metrics["aggregate"]["redis_updates_coalesced"] == 11.0
     assert postgres_store.inserted
+
+
+def test_preload_traffic_is_published_before_processors_start(tmp_path: Path) -> None:
+    processor_manager = RecordingProcessorManager()
+    publisher = PreloadRecordingPublisher(processor_manager)
+    service = ExperimentService(
+        redis_reader=SequenceRedisReader(
+            impressions=[100, 100, 101, 101],
+            clicks=[2, 2, 2, 2],
+        ),
+        postgres_store=SequencePostgresStore(model_counts=[1, 1, 1, 1]),
+        artifact_writer=ExperimentArtifactWriter(str(tmp_path)),
+        publisher=publisher,
+        setup_runner=RecordingSetupRunner(),
+        processor_manager=processor_manager,
+    )
+    definition = _strict_definition(
+        phases=[
+            ExperimentTrafficPhase(
+                phase_name="backlog",
+                impressions=1,
+                events_per_second=0,
+                random_seed=42,
+                settle_seconds=0,
+                log_every=0,
+            )
+        ]
+    ).model_copy(
+        update={
+            "traffic": _strict_definition().traffic.model_copy(
+                update={"preload_before_processors": True}
+            )
+        }
+    )
+
+    service.run(definition, dry_run=False)
+
+    assert publisher.published > 0
+    assert publisher.published_before_processor_start is True
 
 
 def test_full_experiment_records_failed_strict_gate_without_losing_artifact(
@@ -379,7 +462,7 @@ def test_full_experiment_dry_run_skips_setup_processors_and_postgres_insert(
     assert processor_manager.started is False
     assert processor_manager.stopped is False
     assert postgres_store.inserted == []
-    assert result.metrics["producer"]["dry_run"] is True
+    assert "dry_run" not in result.metrics["producer"]
 
 
 def test_processor_early_exit_is_recorded_as_gate_failure(tmp_path: Path) -> None:

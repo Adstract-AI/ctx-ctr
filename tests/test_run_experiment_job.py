@@ -61,17 +61,18 @@ class FakeExperimentService:
                 "config": {},
                 "metrics": {
                     "producer": {
-                        "dry_run": dry_run,
                         "impressions": 10,
                         "clicks": 1,
                         "total_events": 11,
                     },
-                    "before": {"redis_valid_bucket_count": 1},
-                    "after": {"redis_valid_bucket_count": 2},
-                    "delta": {
-                        "redis_total_impressions": 10,
-                        "redis_total_clicks": 1,
-                        "postgres_model_snapshot_count": 0,
+                    "statistics": {
+                        "before": {"redis_valid_bucket_count": 1},
+                        "after": {"redis_valid_bucket_count": 2},
+                        "delta": {
+                            "redis_total_impressions": 10,
+                            "redis_total_clicks": 1,
+                            "postgres_model_snapshot_count": 0,
+                        },
                     },
                 },
                 "artifact_uri": "experiments/results/unit.json",

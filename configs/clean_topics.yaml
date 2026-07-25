@@ -4,3 +4,5 @@ impression_topic: ctr.impressions
 click_topic: ctr.clicks
 event_topic: ctr.events
 dead_letter_topic: ctr.dead-letter
+topic_partitions: 6
+dead_letter_topic_partitions: 3
