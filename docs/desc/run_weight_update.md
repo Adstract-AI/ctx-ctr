@@ -37,8 +37,8 @@ configs/run_weight_update.yaml
 
 ## Purpose
 
-Use this job after `seed_values` or after the Task 1 CTR updater has populated
-Redis bucket statistics.
+Use this job after `seed-values` or after `realtime-ctr` has populated Redis
+bucket statistics.
 
 It reads the current model from Redis, derives single-feature learning buckets
 from the existing triplet CTR buckets, updates `w_ad`, `w_dom`, and `w_ctx`,
@@ -51,7 +51,7 @@ model snapshot in PostgreSQL.
 - Redis
 - PostgreSQL for non-dry-run mode
 
-Kafka, Spark, and Task 1 runtime processing are not used directly by this job.
+Kafka and Spark are not used directly by this job.
 
 ## Redis Inputs
 
@@ -116,8 +116,8 @@ Baseline learning:
 
 ## Disabling Baseline Updates
 
-Baseline updates are enabled by default. To keep Task 2 behavior and update only
-feature-family weights, disable baseline updates:
+Baseline updates are enabled by default. To update only feature-family weights,
+disable baseline updates:
 
 ```bash
 python -m ctx_ctr.jobs.run_weight_update --once --no-baseline-update

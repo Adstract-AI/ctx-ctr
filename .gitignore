@@ -14,3 +14,4 @@ logs/
 experiments/results/*
 !experiments/results/.gitkeep
 .idea/
+agents_metadata/

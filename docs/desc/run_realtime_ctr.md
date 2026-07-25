@@ -64,7 +64,8 @@ python -m ctx_ctr.jobs.seed_values
   `ctx-ctr-flink-realtime`.
 - `--starting-offsets <latest|earliest>`: Offset policy used when starting the
   source. Defaults to `latest`; backlog experiments use `earliest`.
-- `--parallelism <int>`: PyFlink parallelism. Defaults to `1`.
+- `--parallelism <int>`: PyFlink parallelism. Defaults to `2` in the supplied
+  YAML config.
 - `--checkpoint-interval-ms <int>`: Checkpoint interval. Defaults to `10000`.
   Use `0` to disable checkpointing.
 - `--kafka-connector-jar <path>`: Local path to the Flink Kafka connector jar.
@@ -75,7 +76,8 @@ python -m ctx_ctr.jobs.seed_values
   after activity. Defaults to `1000`; use `0` to disable.
 - `--redis-flush-mode <periodic|per_event>`: Redis persistence strategy.
   Defaults to `periodic`. Use `per_event` to synchronously write every accepted
-  bucket update, primarily for baseline performance comparisons.
+  bucket update when immediate external visibility is required or when measuring
+  the cost of synchronous writes.
 - `--redis-flush-interval-ms <int>`: Maximum processing-time delay before a
   dirty bucket is written to Redis in `periodic` mode. Defaults to `500`.
 - `--redis-flush-max-updates <int>`: Flush a bucket after this many updates even
@@ -218,6 +220,6 @@ jars/flink-sql-connector-kafka-3.2.0-1.19.jar
 See `docs/development_setup.md` for the download command. Use
 `--kafka-connector-jar` only when using a different connector location.
 
-For local development, start this job before running `produce_events` so the
-By default, the Kafka consumer begins from the latest offsets and receives newly produced
-events.
+For normal local streaming, start this job before `produce-events`. The default
+`latest` offset policy consumes events published after the Kafka source starts.
+Use `earliest` only when the job must consume an existing backlog.

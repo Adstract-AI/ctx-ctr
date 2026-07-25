@@ -29,8 +29,8 @@ configs/seed_values.yaml
 ## Purpose
 
 Use this job after the infrastructure is running and after `reset_values` if
-you want a clean starting point. It creates the initial state that later Flink
-jobs and API-style readers can consume.
+you want a clean starting point. It creates the initial state consumed by the
+processing jobs and state readers.
 
 ## What It Seeds
 
@@ -60,14 +60,6 @@ This produces 100 bucket combinations.
 - `--domain-prior-strength`: Override publisher-domain family prior strength.
 - `--context-prior-strength`: Override conversation-context family prior
   strength.
-- `--trust-z-score`: Override the z-score used for seeded bucket confidence
-  intervals.
-- `--trust-min-impressions`: Override the minimum impressions required for a
-  seeded bucket to be marked trusted.
-- `--trust-max-variance`: Override the maximum posterior variance allowed for a
-  seeded bucket to be marked trusted.
-- `--trust-max-ci-width`: Override the maximum confidence-interval width
-  allowed for a seeded bucket to be marked trusted.
 
 CLI flags override values from the YAML config.
 
@@ -97,7 +89,7 @@ For every bucket it computes:
 
 The model weights use `baseline_prior_mean` plus centered family weights.
 The current model snapshot also stores the global, triplet, and family-specific
-prior strengths used later by realtime CTR and weight-update jobs.
+prior strengths consumed by the realtime CTR and weight-update jobs.
 
 ## Writes
 

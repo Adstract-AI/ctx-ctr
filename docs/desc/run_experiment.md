@@ -14,23 +14,19 @@ python -m ctx_ctr.jobs.run_experiment
 
 ## What It Does
 
-Runs one configured CTR experiment and records measurable before/after metrics.
+Runs a configured CTR experiment and records measurable system state, timing,
+throughput, and validation results.
 
-The first included experiment is `local_smoke`. It produces a small deterministic
-traffic batch, waits briefly for the realtime processors to catch up, scans Redis
-CTR bucket state, reads Postgres row counts, writes local JSON/Markdown artifacts,
-and inserts one row into `ctr_experiment_results`.
+Included experiment definitions:
 
-The first full-system experiment is `full_system_local`. It resets seed-owned
-Redis/Postgres state, cleans CTR Kafka topics, seeds deterministic values, starts
-`realtime-ctr` and `streaming-weight-update` as child processes, produces phased
-traffic, verifies strict success gates, captures processor logs, writes artifacts,
-and inserts one row into `ctr_experiment_results`.
-
-`realtime_ctr_performance_baseline` isolates realtime CTR throughput. It first
-produces an unthrottled 200,000-impression Kafka backlog, then starts only the
-realtime CTR processor from the earliest offsets and measures how quickly that
-backlog is processed.
+- `local_smoke` produces a small deterministic traffic batch and measures an
+  already-running local system.
+- `full_system_local` resets local state, starts the realtime CTR and streaming
+  weight processors, produces phased traffic, evaluates success gates, and
+  stops the processors.
+- `realtime_ctr_performance_baseline` preloads a large Kafka backlog before
+  starting the realtime CTR processor so sustained consumer throughput can be
+  measured independently of producer pacing.
 
 ## When To Use It
 
@@ -41,12 +37,10 @@ Use this when you want a repeatable run that answers:
 - did model snapshot or experiment-result counts change
 - where is the artifact for this run
 
-The job does not start or stop Flink jobs. Start `realtime-ctr` or
-`streaming-weight-update` separately when the experiment should measure those
-processors for lightweight experiments like `local_smoke`.
-
-For `full_system_local`, the job does start and stop the local processor
-subprocesses itself.
+Processor lifecycle is controlled by the selected experiment definition.
+`local_smoke` expects the required processors to be running externally.
+Full-system and performance definitions can start, monitor, and stop processor
+subprocesses as part of the run.
 
 Traffic configs support two shapes:
 
@@ -82,7 +76,7 @@ Experiment artifacts:
 experiments/results/
 ```
 
-Full-system experiment definition:
+Example full-system experiment definition:
 
 ```bash
 experiments/configs/full_system_local.yaml
@@ -148,10 +142,9 @@ Run the realtime CTR throughput baseline:
 run-experiment --experiment realtime_ctr_performance_baseline
 ```
 
-This experiment is destructive for local CTR state and Kafka topics. Its target
-is at least 3,000 processed events/second. The 200,000-impression backlog keeps
-the processor under sustained load long enough to compare parallelism and Redis
-write strategies without failing solely because a run is below that target.
+This experiment is destructive for local CTR state and Kafka topics. Its large
+backlog keeps the processor under sustained load long enough to compare
+parallelism and Redis persistence strategies.
 
 Use another experiment definition:
 

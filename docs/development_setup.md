@@ -71,9 +71,9 @@ Java launcher and is normal when `JAVA_HOME` points to the Conda JDK and
 
 ## 3. Install or Refresh Core Python Requirements
 
-The previous `conda env update` command installs `requirements.txt`
-automatically. If the `big-data` environment already existed and only the
-Python dependencies need to be installed or refreshed, run:
+The environment definition installs `requirements.txt` automatically. To
+install or refresh only the Python dependencies in an existing `big-data`
+environment, run:
 
 ```bash
 python -m pip install -r requirements.txt
@@ -324,9 +324,9 @@ docker compose \
   ps
 ```
 
-## 13. Seed Demo Data
+## 13. Initialize Deterministic CTR State
 
-Validate the deterministic research-demo seed dataset without writing anything:
+Validate the deterministic seed dataset without writing anything:
 
 ```bash
 seed-values --dry-run
@@ -338,7 +338,7 @@ Reset Postgres and Redis seed-owned state:
 reset-values
 ```
 
-Seed bucket statistics, model weights, and seed metadata:
+Seed bucket statistics, model weights, and the seed run summary:
 
 ```bash
 seed-values
