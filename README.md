@@ -72,6 +72,15 @@ produce-events --impressions 1000 --events-per-second 100
 watch-redis-values --pattern 'ctr:*'
 ```
 
+### Update Model Weights
+
+Start the Flink-native weight learner before producing traffic when the model
+should learn from the same Kafka events:
+
+```bash
+streaming-weight-update
+```
+
 Run a configured experiment:
 
 ```bash
