@@ -73,6 +73,12 @@ def main() -> None:
         help="flush partial processor metrics after this interval; use 0 to disable",
     )
     parser.add_argument(
+        "--redis-flush-mode",
+        choices=("periodic", "per_event"),
+        default=None,
+        help="write every accepted update immediately or flush dirty buckets periodically",
+    )
+    parser.add_argument(
         "--redis-flush-interval-ms",
         type=int,
         default=None,
@@ -103,6 +109,7 @@ def main() -> None:
         f"trust_max_variance={config.trust_max_variance}, "
         f"trust_max_ci_width={config.trust_max_ci_width}, "
         f"metrics_flush_interval_ms={config.metrics_flush_interval_ms}, "
+        f"redis_flush_mode={config.redis_flush_mode}, "
         f"redis_flush_interval_ms={config.redis_flush_interval_ms}, "
         f"redis_flush_max_updates={config.redis_flush_max_updates}, "
         f"config={args.config}"
@@ -142,19 +149,21 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
     from pyflink.datastream.state import ValueStateDescriptor  # type: ignore[import-untyped]
 
     class RedisCtrProcessFunction(KeyedProcessFunction):  # type: ignore[misc]
-        """Process keyed CTR events and periodically flush dirty buckets to Redis."""
+        """Process keyed CTR events and persist updated buckets to Redis."""
 
         def __init__(
             self,
             redis_url: str,
             log_every: int,
             metrics_flush_interval_ms: int,
+            redis_flush_mode: str,
             redis_flush_interval_ms: int,
             redis_flush_max_updates: int,
         ) -> None:
             self._redis_url = redis_url
             self._log_every = log_every
             self._metrics_flush_interval_ms = metrics_flush_interval_ms
+            self._redis_flush_mode = redis_flush_mode
             self._redis_flush_interval_ms = redis_flush_interval_ms
             self._redis_flush_max_updates = redis_flush_max_updates
             self._trust_thresholds = CtrTrustThresholds(
@@ -238,7 +247,12 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
                 raise CtrStateError("Realtime CTR update returned no bucket for valid event")
 
             state.update(result.bucket.model_dump_json())
-            self._mark_bucket_dirty(runtime_context)
+            if self._redis_flush_mode == "per_event":
+                adapter.write_bucket_statistic(result.bucket)
+                self._redis_flushes += 1
+                self._redis_updates_flushed += 1
+            else:
+                self._mark_bucket_dirty(runtime_context)
             self._processed_events += 1
             self._valid_events += 1
             if event.event_type == "impression":
@@ -416,6 +430,7 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
                 "impressions": self._impressions,
                 "clicks": self._clicks,
                 "dead_letters": self._dead_letters,
+                "redis_flush_mode": self._redis_flush_mode,
                 "redis_flushes": self._redis_flushes,
                 "redis_updates_flushed": self._redis_updates_flushed,
                 "redis_updates_coalesced": self._redis_updates_coalesced,
@@ -486,6 +501,7 @@ def run_flink_realtime_ctr_job(config: RunRealtimeCtrJobConfig) -> None:
             REDIS_URL,
             config.log_every,
             config.metrics_flush_interval_ms,
+            config.redis_flush_mode,
             config.redis_flush_interval_ms,
             config.redis_flush_max_updates,
         ),
@@ -511,6 +527,7 @@ def _cli_overrides(args: argparse.Namespace) -> dict[str, object]:
         "kafka_connector_jar",
         "log_every",
         "metrics_flush_interval_ms",
+        "redis_flush_mode",
         "redis_flush_interval_ms",
         "redis_flush_max_updates",
         "trust_z_score",

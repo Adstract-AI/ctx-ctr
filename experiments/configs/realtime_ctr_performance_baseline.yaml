@@ -1,5 +1,5 @@
 experiment_name: realtime_ctr_performance_baseline
-description: Baseline throughput run for draining a preloaded Kafka backlog through realtime CTR.
+description: Per-event Redis throughput baseline for draining a preloaded Kafka backlog.
 settle_seconds: 60
 tags:
   - local
@@ -23,13 +23,11 @@ processors:
       - "--starting-offsets"
       - "earliest"
       - "--parallelism"
-      - "1"
+      - "2"
       - "--log-every"
       - "5000"
-      - "--redis-flush-interval-ms"
-      - "500"
-      - "--redis-flush-max-updates"
-      - "100"
+      - "--redis-flush-mode"
+      - "per_event"
     startup_seconds: 10
     stop_timeout_seconds: 20
   streaming_weight_update:

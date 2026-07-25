@@ -8,6 +8,7 @@ checkpoint_interval_ms: 10000
 kafka_connector_jar: jars/flink-sql-connector-kafka-3.2.0-1.19.jar
 log_every: 10
 metrics_flush_interval_ms: 1000
+redis_flush_mode: periodic
 redis_flush_interval_ms: 500
 redis_flush_max_updates: 100
 trust_z_score: 1.96
