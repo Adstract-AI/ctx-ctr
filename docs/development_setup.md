@@ -71,9 +71,9 @@ Java launcher and is normal when `JAVA_HOME` points to the Conda JDK and
 
 ## 3. Install or Refresh Core Python Requirements
 
-The previous `conda env update` command installs `requirements.txt`
-automatically. If the `big-data` environment already existed and only the
-Python dependencies need to be installed or refreshed, run:
+The environment definition installs `requirements.txt` automatically. To
+install or refresh only the Python dependencies in an existing `big-data`
+environment, run:
 
 ```bash
 python -m pip install -r requirements.txt
@@ -81,7 +81,14 @@ python -m pip install -r requirements.txt
 
 This includes the Python clients for Kafka, Redis, and PostgreSQL, together
 with the data-processing, configuration, testing, linting, and type-checking
-libraries.
+libraries. It also installs JupyterLab and Matplotlib for the analysis notebooks
+under `notebooks/`.
+
+Start JupyterLab from the project root with:
+
+```bash
+jupyter lab
+```
 
 ## 4. Install the Project in Editable Mode
 
@@ -91,14 +98,18 @@ Install the `ctx_ctr` package:
 python -m pip install -e .
 ```
 
-Editable mode makes `src/ctx_ctr` importable as `ctx_ctr`. Changes made to the
-source code become available immediately without reinstalling the package.
+Editable mode makes `src/ctx_ctr` importable as `ctx_ctr` and installs the
+short job commands defined in `pyproject.toml`. Changes made to the source code
+become available immediately without reinstalling the package.
 
 Verify the installation:
 
 ```bash
 python -c "import ctx_ctr; print('ctx_ctr import OK')"
 ```
+
+Each job loads defaults from `configs/*.yaml`. CLI flags override values from
+the YAML config.
 
 ## 5. Install Local PyFlink and PySpark
 
@@ -130,7 +141,36 @@ The `pkg_resources is deprecated` message produced by Apache Beam is a warning,
 not an installation failure. Keep `setuptools` below version 81 while using
 this PyFlink and Beam combination.
 
-## 6. Create the Environment File
+## 6. Install the Local PyFlink Kafka Connector
+
+This step is required when running the local realtime CTR Flink job from the
+Conda environment. PyFlink does not ship the Kafka connector jar with the Python
+package, so the project keeps runtime connector jars in `jars/`.
+
+Download the Flink 1.19 Kafka connector:
+
+```bash
+mkdir -p jars
+curl -L -o jars/flink-sql-connector-kafka-3.2.0-1.19.jar \
+  https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.2.0-1.19/flink-sql-connector-kafka-3.2.0-1.19.jar
+```
+
+The default realtime CTR config already points to this project-relative path:
+
+```yaml
+kafka_connector_jar: jars/flink-sql-connector-kafka-3.2.0-1.19.jar
+```
+
+Run the job normally from the project root:
+
+```bash
+realtime-ctr
+```
+
+You only need `--kafka-connector-jar` when using a different connector jar or
+location.
+
+## 7. Create the Environment File
 
 Create the local `.env` file:
 
@@ -142,7 +182,7 @@ The default values work with the supplied Docker configuration. Change the
 ports or credentials in `.env` only when they conflict with services already
 running on the machine.
 
-## 7. Start the Required Docker Services
+## 8. Start the Required Docker Services
 
 Start Kafka, Redis, and PostgreSQL:
 
@@ -179,7 +219,7 @@ User:      ctx_ctr
 Password:  ctx_ctr
 ```
 
-## 8. Start Kafka UI (Optional)
+## 9. Start Kafka UI (Optional)
 
 Kafka UI is in the optional `tools` profile:
 
@@ -190,7 +230,7 @@ docker compose -f docker-compose.yml --profile tools up -d
 Open `http://localhost:8088` to inspect brokers, topics, messages, and consumer
 groups.
 
-## 9. Start the Flink and Spark Clusters (Optional)
+## 10. Start the Flink and Spark Clusters (Optional)
 
 Use cluster mode when jobs should execute through Dockerized Flink and Spark
 workers:
@@ -202,6 +242,15 @@ docker compose \
   up -d --build
 ```
 
+Rebuild the Flink services after changes to `docker/flink/Dockerfile`:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f compose.processing-clusters.yml \
+  build --no-cache flink-jobmanager flink-taskmanager
+```
+
 Processing endpoints:
 
 ```text
@@ -210,6 +259,33 @@ Spark master UI:  http://localhost:8080
 Spark master URL: spark://localhost:7077
 Spark worker UI:  http://localhost:8082
 ```
+
+The dashboard displays only jobs submitted to this Docker Flink cluster.
+Running `realtime-ctr` directly from the Conda environment uses a separate local
+Flink runtime and does not register the job in the Docker dashboard.
+
+Submit the realtime CTR job to the Docker cluster:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f compose.processing-clusters.yml \
+  exec flink-jobmanager \
+  flink run -d \
+  --python /opt/ctx-ctr/src/ctx_ctr/jobs/run_realtime_ctr.py \
+  --config /opt/ctx-ctr/configs/run_realtime_ctr.yaml \
+  --kafka-connector-jar /opt/ctx-ctr/jars/flink-sql-connector-kafka-3.2.0-1.19.jar \
+  --parallelism 2
+```
+
+The detached submission prints a Flink job ID. Open
+`http://localhost:8081`, select **Jobs**, and open
+`ctx-ctr-realtime-ctr` to inspect its operator graph, subtasks, checkpoints,
+throughput, busy time, and backpressure.
+
+The supplied Kafka topics have six partitions and the Flink TaskManager has
+four task slots. With `--parallelism 2`, the keyed CTR operators run as two
+subtasks and process different bucket keys concurrently.
 
 To start the processing clusters and Kafka UI together:
 
@@ -221,7 +297,7 @@ docker compose \
   up -d --build
 ```
 
-## 10. Connection Addresses
+## 11. Connection Addresses
 
 Python programs running in the local Conda environment use the exposed
 localhost addresses:
@@ -232,7 +308,16 @@ REDIS_URL=redis://localhost:6379/0
 POSTGRES_DSN=postgresql://ctx_ctr:ctx_ctr@localhost:5432/ctx_ctr
 SPARK_MASTER_URL=spark://localhost:7077
 FLINK_REST_URL=http://localhost:8081
+IMPRESSION_TOPIC=ctr.impressions
+CLICK_TOPIC=ctr.clicks
+EVENT_TOPIC=ctr.events
+DEAD_LETTER_TOPIC=ctr.dead-letter
+LOG_LEVEL=INFO
+LOG_COLOR=cyan
 ```
+
+Supported log colors are `black`, `red`, `green`, `yellow`, `blue`, `magenta`,
+`cyan`, and `white`.
 
 Programs running inside Docker use Docker service names:
 
@@ -242,9 +327,13 @@ REDIS_URL=redis://redis:6379/0
 POSTGRES_DSN=postgresql://ctx_ctr:ctx_ctr@postgres:5432/ctx_ctr
 SPARK_MASTER_URL=spark://spark-master:7077
 FLINK_REST_URL=http://flink-jobmanager:8081
+IMPRESSION_TOPIC=ctr.impressions
+CLICK_TOPIC=ctr.clicks
+EVENT_TOPIC=ctr.events
+DEAD_LETTER_TOPIC=ctr.dead-letter
 ```
 
-## 11. Verify the Complete Installation
+## 12. Verify the Complete Installation
 
 Verify the Python environment:
 
@@ -271,7 +360,76 @@ docker compose \
   ps
 ```
 
-## 12. Stop the Services
+## 13. Initialize Deterministic CTR State
+
+Validate the deterministic seed dataset without writing anything:
+
+```bash
+seed-values --dry-run
+```
+
+Reset Postgres and Redis seed-owned state:
+
+```bash
+reset-values
+```
+
+Seed bucket statistics, model weights, and the seed run summary:
+
+```bash
+seed-values
+```
+
+Kafka topics are handled separately. To delete and recreate all known project
+topics, use:
+
+```bash
+clean-topics
+```
+
+To clean only selected topics:
+
+```bash
+clean-topics --only ctr.impressions ctr.clicks
+```
+
+Seeded Redis keys use:
+
+```text
+ctr:{ad_category}:{publisher_domain}:{conversation_category}
+weights:current
+```
+
+## 14. Produce Simulated Events
+
+Validate event generation without publishing to Kafka:
+
+```bash
+produce-events --dry-run --impressions 100
+```
+
+Produce simulated impression and click events to Kafka:
+
+```bash
+produce-events --impressions 1000 --events-per-second 20
+```
+
+Log progress every N produced events:
+
+```bash
+produce-events --impressions 1000 --events-per-second 20 --log-every 100
+```
+
+Use `--log-every 0` to disable progress logs.
+
+By default, impressions are published to `ctr.impressions` and clicks are
+published to `ctr.clicks`. To also mirror every event into `ctr.events`, add:
+
+```bash
+produce-events --impressions 1000 --also-unified
+```
+
+## 15. Stop the Services
 
 Stop the required services:
 
@@ -306,6 +464,9 @@ conda activate big-data
 python -m pip install -e .
 python -m pip install "setuptools<81" wheel "Cython==0.29.36"
 python -m pip install --no-build-isolation -r requirements-processing-local.txt
+mkdir -p jars
+curl -L -o jars/flink-sql-connector-kafka-3.2.0-1.19.jar \
+  https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.2.0-1.19/flink-sql-connector-kafka-3.2.0-1.19.jar
 cp .env.example .env
 docker compose -f docker-compose.yml up -d
 python -m pip check

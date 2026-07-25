@@ -1,0 +1,17 @@
+impression_topic: ctr.impressions
+click_topic: ctr.clicks
+consumer_group: ctx-ctr-flink-streaming-weight-update
+parallelism: 1
+checkpoint_interval_ms: 10000
+kafka_connector_jar: jars/flink-sql-connector-kafka-3.2.0-1.19.jar
+interval_seconds: 4
+learning_rate: 0.25
+evidence_smoothing: 1000.0
+ridge: 0.01
+max_delta: 0.25
+min_feature_impressions: 500
+max_feature_ci_width: 0.02
+snapshot_name_prefix: flink_streaming_weight_update
+baseline_update: true
+baseline_max_ci_width: 0.05
+dry_run: false

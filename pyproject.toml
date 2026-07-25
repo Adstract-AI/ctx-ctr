@@ -7,6 +7,24 @@ name = "ctx-ctr"
 version = "0.1.0"
 description = "CTR real-time processing research implementation."
 requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Andrea Stevanoska" },
+    { name = "Viktor Kostadinoski" },
+    { name = "Darko Petruushevski" },
+]
+
+[project.scripts]
+clean-topics = "ctx_ctr.jobs.clean_topics:main"
+persist-redis-buckets = "ctx_ctr.jobs.persist_redis_buckets:main"
+produce-events = "ctx_ctr.jobs.produce_events:main"
+reset-values = "ctx_ctr.jobs.reset_values:main"
+run-experiment = "ctx_ctr.jobs.run_experiment:main"
+realtime-ctr = "ctx_ctr.jobs.run_realtime_ctr:main"
+seed-values = "ctx_ctr.jobs.seed_values:main"
+streaming-weight-update = "ctx_ctr.jobs.run_streaming_weight_update:main"
+watch-redis-values = "ctx_ctr.jobs.watch_redis_values:main"
+weight-update = "ctx_ctr.jobs.run_weight_update:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

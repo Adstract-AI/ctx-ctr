@@ -7,6 +7,12 @@ services:
     container_name: ctx-ctr-flink-jobmanager
     command: jobmanager
     environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://redis:6379/0
+      POSTGRES_DSN: postgresql://${POSTGRES_USER:-ctx_ctr}:${POSTGRES_PASSWORD:-ctx_ctr}@postgres:5432/${POSTGRES_DB:-ctx_ctr}
+      PYTHONPATH: /opt/ctx-ctr/src
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_COLOR: ${LOG_COLOR:-cyan}
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
         parallelism.default: 1
@@ -16,6 +22,8 @@ services:
       - "${FLINK_JOBMANAGER_PORT:-8081}:8081"
     volumes:
       - ./src:/opt/ctx-ctr/src
+      - ./configs:/opt/ctx-ctr/configs:ro
+      - ./jars:/opt/ctx-ctr/jars:ro
       - ./jobs:/opt/ctx-ctr/jobs
     depends_on:
       kafka:
@@ -31,6 +39,12 @@ services:
     container_name: ctx-ctr-flink-taskmanager
     command: taskmanager
     environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://redis:6379/0
+      POSTGRES_DSN: postgresql://${POSTGRES_USER:-ctx_ctr}:${POSTGRES_PASSWORD:-ctx_ctr}@postgres:5432/${POSTGRES_DB:-ctx_ctr}
+      PYTHONPATH: /opt/ctx-ctr/src
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_COLOR: ${LOG_COLOR:-cyan}
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
         taskmanager.numberOfTaskSlots: 4
@@ -39,6 +53,8 @@ services:
         python.executable: /usr/bin/python3
     volumes:
       - ./src:/opt/ctx-ctr/src
+      - ./configs:/opt/ctx-ctr/configs:ro
+      - ./jars:/opt/ctx-ctr/jars:ro
       - ./jobs:/opt/ctx-ctr/jobs
     depends_on:
       flink-jobmanager:
